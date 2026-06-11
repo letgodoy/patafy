@@ -20,21 +20,23 @@ Organização sugerida para o monólito:
 
 ### 1.3. Pets
 
-- Pet, `PetTutor`, observações internas / compartilhadas
+- Pet (`deleted_at` para **soft delete**, PET-03), `PetTutor`, `PetTutorConvite` (RF02.4 — compartilhamento com segundo tutor), observações internas / compartilhadas
 - **Tipo de animal obrigatório** no cadastro do pet; raça vinculada a um tipo no catálogo global
 
 ### 1.4. PetShop
 
-- PetShop, configurações (`config_json`), funcionários, horários, bloqueios de agenda
+- PetShop, configurações (`config_json` **v2** — horários, prazos, políticas, branding; ver `docs/schemas/petshop-config-json.ts`), funcionários, horários, bloqueios de agenda
 
 ### 1.5. Serviços & Pacotes
 
-- Serviço, variações, pacotes e créditos
+- Serviço, variações, pacotes e créditos; **`PacoteItemDebito`** como registo idempotente do débito por agendamento
 - **Dependência entre serviços** (ex.: hidratação exige banho no mesmo atendimento): **nice to have** (ver secção 7)
 
 ### 1.6. Agenda & Atendimentos
 
 - Agendamento, `AgendamentoServico`, Atendimento, regras de slot e banhista
+- **Um único `status` de ciclo de vida** no `Agendamento`; o `Atendimento` 1:1 é registo operacional (execução, observações), sem estado duplicado
+- Concorrência na marcação: **`SELECT FOR UPDATE`** (ou equivalente) na mesma transação que grava o slot — ver `docs/Arquitetura.md`
 - Campo **`pago`** (indicador local; **sem** pagamento processado na plataforma)
 
 ### 1.7. Notificações
@@ -172,6 +174,13 @@ agressivo (bool)
 cuidados_especiais (text)
 obs_internas (jsonb por petshop)
 obs_compartilhadas (text)
+deleted_at (timestamptz, nullable)   -- soft delete (PET-03); listagens operacionais: `WHERE deleted_at IS NULL`
+```
+
+**Formato de `obs_internas`:** objeto JSON cujo **valor por chave** é texto livre por loja. Chave = `petshop_id` (UUID em string). Valor = nota interna daquela loja sobre o pet (outras lojas não vêem a chave alheia).
+
+```json
+{ "a1b2c3d4-...-uuid-petshop-1": "Morde quando assopra", "e5f6...": "Dócil" }
 ```
 
 ### 3.6. PetTutor (N:N)
@@ -185,6 +194,27 @@ tutor_profile_id (FK TutorProfile)
 tipo (enum: responsavel, autorizado)
 ```
 
+### 3.6.1. PetTutorConvite
+
+Fluxo RF02.4: o tutor **responsável** convida por **e-mail** um segundo tutor; após cadastro/login do convidado com o mesmo e-mail, o convite pode ser **aceito** e gera-se `PetTutor` com `tipo = autorizado`. Um pet não deve ter mais de um convite **pendente** simultâneo para o mesmo e-mail.
+
+```
+PetTutorConvite
+---------
+id (UUID)
+pet_id (FK Pet)
+convitador_tutor_profile_id (FK TutorProfile)   -- tipicamente o responsável
+convidado_email (text, normalizado lower)
+convidado_tutor_profile_id (FK TutorProfile, nullable)   -- preenchido no aceite, quando o utilizador já existe
+token_hash (text)          -- hash do token da ligação segura (nunca guardar token em claro)
+status (enum: pendente | aceito | expirado | revogado)
+expires_at (timestamptz)
+created_at (timestamptz)
+accepted_at (timestamptz, nullable)
+```
+
+**Regra de unicidade sugerida:** `UNIQUE (pet_id, convidado_email)` onde `status = pendente` (índice parcial PostgreSQL) ou validação equivalente na aplicação.
+
 ### 3.7. PetShop
 
 ```
@@ -197,7 +227,7 @@ cnpj
 endereco
 telefone
 email
-config_json (jsonb)
+config_json (jsonb)   -- contrato TypeScript: `docs/schemas/petshop-config-json.ts` (`PetshopConfigJsonV2`, `schema_version` 1 ou 2)
 ```
 
 ### 3.8. Servico
@@ -249,7 +279,7 @@ ativo
 
 ### 3.11. PacoteItem
 
-`quantidade_usada` incrementa no débito ao entrar em **Em andamento** (idempotente).
+`quantidade_usada` reflecte créditos consumidos; cada débito em **Em andamento** regista-se em **`PacoteItemDebito`** (idempotente).
 
 ```
 PacoteItem
@@ -258,8 +288,25 @@ id (UUID)
 pacote_id
 servico_id
 quantidade_total
-quantidade_usada
+quantidade_usada   -- mantido coerente com a soma dos débitos (atualizar na mesma transação que insere em PacoteItemDebito)
 ```
+
+### 3.11.1. PacoteItemDebito (idempotência RF06)
+
+Registo **imutável** por linha de débito: garante que a transição para **Em andamento** não debita duas vezes o mesmo crédito para o mesmo agendamento.
+
+```
+PacoteItemDebito
+---------
+id (UUID)
+agendamento_id (FK Agendamento)
+pacote_pet_id (FK PacotePet)      -- instância do pacote no pet
+pacote_item_id (FK PacoteItem)
+quantidade (int, default 1)       -- unidades debitadas neste evento
+created_at (timestamptz)
+```
+
+**Constraint de idempotência:** `UNIQUE (agendamento_id, pacote_item_id)` — um agendamento debita no máximo **uma vez** cada linha de item de pacote aplicável. A operação de débito = `INSERT … ON CONFLICT DO NOTHING` (ou equivalente) + `UPDATE PacoteItem.quantidade_usada` apenas quando o insert ocorreu.
 
 ### 3.12. PacotePet
 
@@ -287,10 +334,11 @@ pet_id (FK Pet)
 tutor_profile_id (FK TutorProfile)
 data_hora_inicio
 duracao_total_minutos
-banhista_id (opcional, FK PetshopUserProfile)
-status (enum — ver 3.15)
+banhista_id (opcional, FK PetshopUserProfile)   -- banhista **reservado** na agenda (slot); ver 3.15
+status (enum — **única fonte de verdade** do ciclo de vida; ver 3.15)
 origem (tutor | atendente)
 pago (boolean)   -- indicador local; pagamento fora da plataforma
+precisa_transporte (boolean, default false)   -- alinhado ao fluxo do tutor (PRD §4.3)
 ```
 
 ### 3.14. AgendamentoServico (snapshot na marcação)
@@ -306,20 +354,23 @@ ordem
 
 ### 3.15. Atendimento
 
+Registo **operacional** da execução (1:1 com o agendamento). O tutor agenda **um** atendimento; o ciclo de vida (**status**) não se duplica: persiste **apenas** em `Agendamento`. A UI/API podem falar em “status do atendimento” como **alias** do status do agendamento.
+
 ```
 Atendimento
 ---------
 id (UUID)
 agendamento_id (FK)
-banhista_id (FK PetshopUserProfile)
-status (enum)
+banhista_id (FK PetshopUserProfile)   -- quem **executou** (pode diferir do `Agendamento.banhista_id` quando o tutor não fixou banhista e a loja realocou em silêncio)
 observacoes_internas
 observacoes_gerais
 ```
 
-**Estados canônicos (Agendamento / Atendimento):** `Aguardando confirmacao` → `Confirmado` → (`Em andamento` | `Atrasado` | `Pronto`) → `Finalizado`; `Cancelado` conforme regras.
+**`banhista_id` em dois sítios:** `Agendamento.banhista_id` = ocupação de slot / intenção na marcação; `Atendimento.banhista_id` = responsável pela execução registada (auditoria e histórico). Quando não há troca silenciosa, os dois coincidem.
 
-**Débito de pacote:** ao entrar em **Em andamento**, debitar créditos aplicáveis (idempotente).
+**Estados canônicos (só em `Agendamento.status`):** `Aguardando confirmacao` → `Confirmado` → (`Em andamento` | `Atrasado` | `Pronto`) → `Finalizado`; `Cancelado` conforme regras.
+
+**Débito de pacote:** ao entrar em **Em andamento**, criar linhas em **`PacoteItemDebito`** (idempotente por `UNIQUE (agendamento_id, pacote_item_id)`) e atualizar `PacoteItem.quantidade_usada` na mesma transação.
 
 > **Pagamento:** um único indicador **`pago` (boolean)** no **Agendamento** (acerto fora da plataforma). Não há processamento de pagamento na V1.
 
@@ -361,7 +412,7 @@ id (UUID)
 occurred_at (timestamptz)
 actor_user_id (FK User, nullable se sistema)
 petshop_id (FK PetShop, nullable para ações globais)
-entity_type (text)   -- ex.: Agendamento, Atendimento, Pet, PacotePet
+entity_type (text)   -- ex.: Agendamento, Atendimento, Pet, PacotePet, PetTutorConvite, PacoteItemDebito
 entity_id (UUID)
 action (text)        -- ex.: CREATED, STATUS_CHANGED, FIELD_UPDATED, BANHISTA_CHANGED
 metadata (jsonb)    -- snapshot opcional: antes/depois, IP, correlação com e-mail enviado, etc.
@@ -375,14 +426,14 @@ metadata (jsonb)    -- snapshot opcional: antes/depois, IP, correlação com e-m
 
 - **1 User** → **0..1 TutorProfile** e **0..N PetshopUserProfile** (perfis distintos)
 - **Não há** relação direta **TutorProfile ↔ PetShop**
-- **1 TutorProfile → N PetTutor → N Pets**
+- **1 TutorProfile → N PetTutor → N Pets**; **1 TutorProfile → N PetTutorConvite** (como convitador); convites referenciam `pet_id` e `convidado_email` até aceite
 - **1 PetShop → N funcionários** (`PetshopUserProfile`)
 - **1 PetShop → N Servicos / Pacotes / Agendamentos**
 - **TipoAnimal / Raca / Porte / Pelagem** → referenciados por **Pet** (`tipo_animal_id` **obrigatório**; `raca` também exige tipo) e (parcialmente) por **ServicoVariante**
 - **1 Agendamento** → **1 Pet** + **1 PetShop** + **1 TutorProfile** (cliente do agendamento) + **N AgendamentoServico**
 - **1 Agendamento → 1 Atendimento**
 - **1 Atendimento** → serviços executados (variantes; baseline + adicionais no balcão)
-- **1 Atendimento** → débito em **PacoteItem** quando aplicável
+- **1 Agendamento** → **N PacoteItemDebito** (0..N) quando há débito de pacote; cada débito referencia **PacoteItem** + **PacotePet**
 - **User** → **RegistroOperacional** como `actor_user_id`; entidades alvo em `entity_type` / `entity_id`
 
 ---
@@ -396,7 +447,7 @@ metadata (jsonb)    -- snapshot opcional: antes/depois, IP, correlação com e-m
 
 ### Pacotes
 
-- Créditos; débito em **Em andamento**; validade opcional; travado vs personalizável
+- Créditos; débito em **Em andamento** via **`PacoteItemDebito`** + `UNIQUE (agendamento_id, pacote_item_id)`; validade opcional; travado vs personalizável
 
 ### Serviços
 
@@ -513,6 +564,7 @@ erDiagram
         string cuidados_especiais
         jsonb obs_internas
         string obs_compartilhadas
+        datetime deleted_at
     }
 
     PetTutor {
@@ -520,6 +572,19 @@ erDiagram
         UUID pet_id
         UUID tutor_profile_id
         string tipo
+    }
+
+    PetTutorConvite {
+        UUID id
+        UUID pet_id
+        UUID convitador_tutor_profile_id
+        string convidado_email
+        UUID convidado_tutor_profile_id
+        string token_hash
+        string status
+        datetime expires_at
+        datetime created_at
+        datetime accepted_at
     }
 
     PetShop {
@@ -571,6 +636,15 @@ erDiagram
         int quantidade_usada
     }
 
+    PacoteItemDebito {
+        UUID id
+        UUID agendamento_id
+        UUID pacote_pet_id
+        UUID pacote_item_id
+        int quantidade
+        datetime created_at
+    }
+
     PacotePet {
         UUID id
         UUID pacote_id
@@ -590,6 +664,7 @@ erDiagram
         string status
         string origem
         boolean pago
+        boolean precisa_transporte
     }
 
     AgendamentoServico {
@@ -603,7 +678,6 @@ erDiagram
         UUID id
         UUID agendamento_id
         UUID banhista_id
-        string status
         string observacoes_internas
         string observacoes_gerais
     }
@@ -648,6 +722,8 @@ erDiagram
 
     TutorProfile ||--o{ PetTutor : associa
     Pet ||--o{ PetTutor : associa
+    TutorProfile ||--o{ PetTutorConvite : convida
+    Pet ||--o{ PetTutorConvite : alvo
 
     Raca ||--o{ Pet : classifica
     Porte ||--o{ Pet : porte
@@ -674,7 +750,10 @@ erDiagram
 
     Agendamento ||--|| Atendimento : gera
     Atendimento ||--o{ ServicoVariante : executa
-    Atendimento ||--o{ PacoteItem : consome
+
+    Agendamento ||--o{ PacoteItemDebito : debita
+    PacotePet ||--o{ PacoteItemDebito : instancia
+    PacoteItem ||--o{ PacoteItemDebito : linha
 ```
 
 ---
@@ -700,6 +779,7 @@ flowchart LR
     subgraph Pets["Pets"]
         PET[Pet]
         PT[PetTutor]
+        PTC[PetTutorConvite]
     end
 
     subgraph PetShop["PetShop"]
@@ -712,6 +792,7 @@ flowchart LR
         SV[ServicoVariante]
         PAC[Pacote]
         PI[PacoteItem]
+        PID[PacoteItemDebito]
         PP[PacotePet]
     end
 
@@ -739,7 +820,9 @@ flowchart LR
     U --> PUP
 
     TP --> PT
+    TP --> PTC
     PET --> PT
+    PET --> PTC
 
     PS --> PUP
     PS --> S
@@ -750,12 +833,15 @@ flowchart LR
     S --> SV
     PAC --> PI
     PAC --> PP
+    PI --> PID
+    PP --> PID
 
     PET --> AG
     TP --> AG
     AG --> AS
     AS --> SV
     AG --> AT
+    AG --> PID
 
     U --> NO
     U --> RO

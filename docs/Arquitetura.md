@@ -32,7 +32,7 @@ Este documento materializa decisões técnicas derivadas do **PRD** e do **Model
 | RF06–RF09, estados canónicos | Serviços com variantes e duração; motor de agenda sem sobreposição por banhista; máquina de estados explícita e idempotência no débito de pacote em **Em andamento**. |
 | RF07–RF08, RF10 | Disponibilidade e remarcação; regras de notificação em alterações de agenda com banhos marcados; eventos RF10 → fila/outbox. |
 | RNF01–RNF04 | PWA/mobile-first; orçamento de latência; encriptação em trânsito e em repouso para dados sensíveis; isolamento lógico por `petshop_id`. |
-| Modelo de domínio §1–3 | Bounded contexts e esquema relacional; `NotificacaoOutbox`; `obs_internas` por pet shop em JSON. |
+| Modelo de domínio §1–3 | Bounded contexts e esquema relacional; `NotificacaoOutbox`; `obs_internas` por pet shop em JSON; `PacoteItemDebito`; `PetTutorConvite`; `Pet.deleted_at`. |
 
 ---
 
@@ -73,7 +73,7 @@ flowchart TB
 
   subgraph Cloud["Conta cloud / hospedagem"]
     API["API monolito (Fastify + GraphQL Yoga)"]
-    WORKER["Worker notificacoes (Node + Prisma)"]
+    WORKER["Worker (Node + Prisma): outbox + jobs agendados"]
     PG[(PostgreSQL)]
   end
 
@@ -101,7 +101,7 @@ flowchart TB
 - **`web-tutor` (React + Vite + Park UI):** aplicação **exclusiva** do tutor; cliente GraphQL (p.ex. urql ou Apollo) com token Firebase (`Authorization: Bearer`).
 - **`web-petshop` (React + Vite + Park UI):** aplicação **exclusiva** da equipa do pet shop (owner, atendente, banhista); mesmo contrato GraphQL, *queries*/*mutations* filtradas por RBAC.
 - **API (monólito):** servidor **Fastify** com **GraphQL Yoga** (p.ex. `POST /graphql`); schema e *resolvers* organizados por **bounded context**; **Prisma** para acesso a PostgreSQL; RBAC em *plugins* / `context` do Yoga + serviços de domínio; transações Prisma incluem escrita na outbox quando o RF10 aplicar.
-- **Worker:** processa `NotificacaoOutbox` (estado `pendente` → `enviado` / `falha` com retries exponenciais e *dead letter* manual). Mantém o MVP simples sem exigir fila externa obrigatória; evolui para SQS/Pub-Sub se o volume exigir.
+- **Worker:** processa `NotificacaoOutbox` (estado `pendente` → `enviado` / `falha` com retries exponenciais e *dead letter* manual). **No mesmo processo (ou *cron* acoplado),** executa *jobs* periódicos que dependem do tempo, p.ex. **cancelamento automático por atraso** (RF08.5): consulta agendamentos em estado compatível, compara `data_hora_inicio` + tolerância configurada, aplica transição para `Cancelado` (ou estado definido no PRD) dentro de transação e regista auditoria. Mantém o MVP simples sem fila externa obrigatória; evolui para SQS/Pub-Sub se o volume exigir.
 - **PostgreSQL:** multi-tenant lógico; integridade referencial; índices para agenda (`petshop_id`, `banhista_id`, intervalo temporal).
 
 ---
@@ -179,11 +179,11 @@ Organização sugerida por **pastas de domínio** no projecto da API (cada uma c
 | `auth` / `users` | Sincronização de utilizador, contexto de sessão | `User`, `me`, `syncUser` |
 | `catalogo-global` | CRUD tipos, raças, portes, pelagens | `TipoAnimal`, `Raca`, mutations admin |
 | `petshops` | Loja, configuração, bloqueios, staff | `PetShop`, `bloqueios`, `staff` |
-| `pets` | Pets e tutores associados | `Pet`, `PetTutor` |
+| `pets` | Pets e tutores associados | `Pet` (incl. `deleted_at`), `PetTutor`, `PetTutorConvite` |
 | `servicos` | Serviços e variantes | `Servico`, `ServicoVariante` |
-| `pacotes` | Pacotes, itens, associação a pets | `Pacote`, créditos, saldo por pet |
-| `agendamentos` | Marcação, confirmação, remarcação | `Agendamento`, `slotsDisponiveis`, mutations de ciclo de vida |
-| `atendimentos` | Execução, serviços adicionais, estados | `Atendimento`, transições de estado |
+| `pacotes` | Pacotes, itens, associação a pets, débito idempotente | `Pacote`, `PacoteItemDebito`, créditos, saldo por pet |
+| `agendamentos` | Marcação, confirmação, remarcação, **máquina de estados** | `Agendamento`, `slotsDisponiveis`, mutations de ciclo de vida (`status` canónico) |
+| `atendimentos` | Execução no balcão, serviços adicionais, observações | `Atendimento` (sem `status` próprio; estado = `Agendamento.status`) |
 | `notificacoes` | Consulta administrativa / reprocessamento | `NotificacaoOutbox` (leitura restrita) |
 | `auditoria` | Leitura de trilha | `RegistroOperacional` |
 
@@ -197,11 +197,13 @@ Cada módulo: **resolvers** + serviços de domínio + **Prisma** (*queries* tipa
 - **Convenções:** chaves UUID v4/v7; horários sempre `timestamptz`; valores monetários em `numeric(12,2)`; `jsonb` para `config_json`, `obs_internas`, payloads de notificação e metadados de auditoria.
 - **Índices críticos (MVP):** `(petshop_id, data_hora_inicio)` em `Agendamento`; `(banhista_id, data_hora_inicio)` para conflitos; `(pet_id)` para histórico tutor; `(status, data_envio)` na outbox para o worker.
 
+**Concorrência na marcação (anti double-booking):** mutations que criam ou movem agendamento devem correr dentro de uma **transação** que (1) resolve o `banhista_id` efectivo do slot, (2) **bloqueia** linhas de agenda relevantes com `SELECT … FOR UPDATE` sobre o(s) agendamento(s) existentes do mesmo `banhista_id` cujo intervalo `[data_hora_inicio, fim)` intersecta o novo intervalo (ou bloqueio equivalente por chave de recurso), e (3) só então insere/actualiza. Validação só em memória **não** basta para dois pedidos simultâneos.
+
 ---
 
-## Máquina de estados (Agendamento / Atendimento)
+## Máquina de estados (única fonte: `Agendamento.status`)
 
-Estados canónicos alinhados ao PRD §9 / modelo §3.15:
+Estados canónicos alinhados ao PRD §9 / modelo de domínio §3.13–3.15:
 
 ```mermaid
 stateDiagram-v2
@@ -221,7 +223,7 @@ stateDiagram-v2
 
 **Regras transversais**
 
-- **Débito de pacote (RF06):** na transição para **Em andamento**, executar rotina **idempotente** que incrementa `quantidade_usada` em `PacoteItem` aplicável.
+- **Débito de pacote (RF06):** na transição para **Em andamento**, inserir linhas em **`PacoteItemDebito`** com `UNIQUE (agendamento_id, pacote_item_id)` e, **só se o insert ocorrer**, atualizar `PacoteItem.quantidade_usada` na mesma transação Prisma (retry seguro).
 - **`pago`:** boolean no `Agendamento`; em cancelamento / não compareceu, defeito **não pago** (ajustável apenas por staff conforme política interna).
 - **Banhista escolhido pelo tutor (RF07):** bloquear troca de `banhista_id` excepto cenários explicitados no PRD (apenas data/hora).
 
@@ -232,7 +234,7 @@ stateDiagram-v2
 ### Agendamento pelo tutor
 
 1. Cliente obtém slots livres: *query* GraphQL (p.ex. `availableSlots`) calcula intersecção de horário de funcionamento, duração total do snapshot de serviços, ocupação por banhista e `BloqueioAgenda`.
-2. *Mutation* (p.ex. `createAgendamento`) cria registo `Aguardando confirmacao`, linhas `AgendamentoServico`, `Atendimento` associado (rascunho operacional) conforme modelagem física escolhida na implementação.
+2. *Mutation* (p.ex. `createAgendamento`) cria registo `Aguardando confirmacao`, linhas `AgendamentoServico`, **e** registo `Atendimento` 1:1 (dados operacionais: banhista executado, observações) **sem** coluna de estado duplicada — toda transição de estado actualiza só `Agendamento.status`.
 3. Enfileira e-mail **agendado** (RF10).
 4. Confirmação pelo pet shop → estado **Confirmado** + e-mail **confirmado**.
 
@@ -273,7 +275,7 @@ stateDiagram-v2
 
 ## Estratégia de testes
 
-- **Unitários:** regras de sobreposição de agenda, máquina de estados, cálculo de duração total, débito idempotente de pacote.
+- **Unitários:** regras de sobreposição de agenda, transacções com *lock* de intervalo (`FOR UPDATE`), máquina de estados, cálculo de duração total, débito idempotente de pacote.
 - **Integração:** **Fastify** `inject()` ou supertest + PostgreSQL (Testcontainers); execução de *documents* GraphQL contra o Yoga em testes.
 - **E2E (opcional MVP+):** fluxos críticos tutor: cadastro → agendar → receber confirmação simulada (esp de e-mail em sandbox).
 
