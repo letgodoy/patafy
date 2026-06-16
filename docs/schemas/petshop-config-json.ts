@@ -41,6 +41,13 @@ export interface DiaFuncionamento {
 export interface PetshopConfigJsonV2 {
   schema_version: 2;
 
+  /**
+   * Slug único para URL pública da loja no web-tutor (ex.: `/loja/petcare-centro`).
+   * Regex: `^[a-z0-9]+(?:-[a-z0-9]+)*$` — min 3, max 64 caracteres.
+   * Único em todo o sistema (validar na API).
+   */
+  slug: string;
+
   /** Nome de marca / exibição curta (complementa `PetShop.nome_exibicao`). */
   nome: string;
 
