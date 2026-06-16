@@ -118,7 +118,7 @@ O pet shop terá uma interface administrativa para gerenciar agenda, produtos, s
 - Seleção de serviços.
 - Confirmação do agendamento.
 - Histórico de banhos.
-- Se precisar de transporte.
+- Indicar se precisa de transporte (persistido em `Agendamento.precisa_transporte`; logística fora do âmbito técnico do MVP salvo este indicador).
 - O tutor pode adicionar o evento do calendário no seu calendário pessoal, baixando o evento direto da interface.
 
 ### **4.4 Agenda do Pet Shop**
@@ -220,6 +220,7 @@ O pet shop terá uma interface administrativa para gerenciar agenda, produtos, s
 
       1. o Tutor principal teria a opção de adicionar o compartilhamento do pet com outro tutor;
       2. o segundo Tutor teria que realizar o cadastro na aplicação, e após esse cadastro o Tutor principal, dentro do seu cadastro, acionar a opção de compartilhar o Pet.
+      3. **Modelo:** o fluxo de convite/aceite persiste em **`PetTutorConvite`** (e-mail do convidado, token seguro, estados pendente/aceito/expirado/revogado); no aceite válido cria-se **`PetTutor`** com `tipo = autorizado` (ver `docs/Modelo-de-Dominio.md` §3.6.1).
    5. Cada pet deve ter um campo de observações internas (somente o petshop responsável pela observação pode ver a própria observação. não permitir visualizar de outros petshops) e observações compartilhadas com o tutor (o tutor ve as observações de todos os petshops, mas o petshop só ve o próprio).
 3. **RF03 - Cadastro de pet shop**
 
@@ -242,7 +243,8 @@ O pet shop terá uma interface administrativa para gerenciar agenda, produtos, s
       6. horário de funcionamento
       7. tempo limite de remarcação e cancelamento
       8. politica de cancelamento
-      9. e demais futuras configurações e personalizações gerais do sistema
+      9. e demais futuras configurações e personalizações gerais do sistema  
+         **— campos 1–9 (filtros, horários, prazos, políticas, buffer entre banhos, etc.) mapeiam para `PetShop.config_json` conforme `PetshopConfigJsonV2` em `docs/schemas/petshop-config-json.ts`.**
    5. O Owner deve cadastrar os serviços e pacotes
 4. **RF04 - Cadastro de administrador do sistema e catálogo global**
 
@@ -274,7 +276,7 @@ O pet shop terá uma interface administrativa para gerenciar agenda, produtos, s
    5. **Pacotes — tipos**
       1. **Pacote travado:** serviços e quantidades fixos na definição do pacote; preço fixo; variação permitida apenas por **porte** e/ou **pelagem** na precificação.
       2. **Pacote personalizável:** na venda, o atendente define serviços e quantidades; preço calculado pela soma dos itens, com **desconto percentual opcional** sobre o total.
-   6. **Pacotes — débito de créditos:** o sistema deve **debitar** itens do pacote quando o status do agendamento/atendimento passar para **Em andamento** (transição única por atendimento, idempotente na implementação).
+   6. **Pacotes — débito de créditos:** o sistema deve **debitar** itens do pacote quando o status do agendamento/atendimento passar para **Em andamento** (transição única por agendamento). A idempotência é garantida por tabela **`PacoteItemDebito`** com restrição **`UNIQUE (agendamento_id, pacote_item_id)`** e atualização de `quantidade_usada` apenas quando o registo de débito é criado (ver modelo de domínio).
 7. **RF07 - Agendamento**
 
    1. O tutor deve conseguir selecionar o pet shop, data, horário, pet, banhista (se disponível) e serviços disponíveis para o pet. O sistema deve **persistir o tutor** (`tutor_profile` do contexto), as **variantes escolhidas** e a **duração total** usada para ocupar o slot na agenda. (Lembrar do controle de pacote quando aplicável.)
@@ -490,9 +492,9 @@ O monorepo **Nx** com **duas SPAs** (tutor vs pet shop) partilha tooling e opcio
 | --- | --- |
 | **História** | **Como tutor, quero excluir um pet** |
 | **Importância** | **BAIXA** |
-| **Critérios de Aceite** | - **Exclusão deve pedir confirmação** - **Após excluir, pet não aparece mais na lista** - **Soft delete** |
+| **Critérios de Aceite** | - **Exclusão deve pedir confirmação** - **Após excluir, pet não aparece mais na lista** - **Soft delete** (`Pet.deleted_at` preenchido; listagens com `WHERE deleted_at IS NULL`) |
 | **Item Jira** | **PET-03** |
-| **Notas** | **—** |
+| **Notas** | **Campo `deleted_at` no modelo relacional; sem hard delete no MVP.** |
 
 ---
 
