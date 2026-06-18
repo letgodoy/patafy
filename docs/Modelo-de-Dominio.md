@@ -172,16 +172,18 @@ idade
 peso
 agressivo (bool)
 cuidados_especiais (text)
-obs_internas (jsonb por petshop)
-obs_compartilhadas (text)
+obs_internas (jsonb)        -- estrutura: { "<petshop_id>": "texto" }; cada pet shop vê apenas a própria chave
+obs_compartilhadas (jsonb)  -- estrutura: { "<petshop_id>": "texto" }; tutor vê todas; pet shop vê apenas a própria
 deleted_at (timestamptz, nullable)   -- soft delete (PET-03); listagens operacionais: `WHERE deleted_at IS NULL`
 ```
 
-**Formato de `obs_internas`:** objeto JSON cujo **valor por chave** é texto livre por loja. Chave = `petshop_id` (UUID em string). Valor = nota interna daquela loja sobre o pet (outras lojas não vêem a chave alheia).
+**Formato de `obs_internas` e `obs_compartilhadas`:** objeto JSON cujo **valor por chave** é texto livre por loja. Chave = `petshop_id` (UUID em string). Outras lojas não vêem chaves alheias em `obs_internas`; o tutor vê todas as chaves de `obs_compartilhadas`.
 
 ```json
 { "a1b2c3d4-...-uuid-petshop-1": "Morde quando assopra", "e5f6...": "Dócil" }
 ```
+
+> **Motivo da mudança de `text` → `jsonb` em `obs_compartilhadas`:** com campo `text` único, registros de múltiplos pet shops sobrescrevem uns aos outros. O `jsonb` keyed por `petshop_id` preserva a autoria de cada observação e respeita a regra do PRD RF02.5.
 
 ### 3.6. PetTutor (N:N)
 
@@ -239,6 +241,7 @@ Servico
 ---------
 id (UUID)
 petshop_id (FK)
+categoria_id (FK CategoriaServico, opcional)
 nome
 descricao
 ativo
@@ -258,10 +261,25 @@ duracao_minutos
 preco
 ```
 
+### 3.9.1. CategoriaServico
+
+Categoria opcional para agrupar serviços no catálogo do pet shop (ex.: Banho, Tosa, Estética).
+
+```
+CategoriaServico
+---------
+id (UUID)
+petshop_id (FK PetShop)
+nome
+ativo
+```
+
+> Campo `categoria_id (FK CategoriaServico, opcional)` adicionado em `Servico` (ver 3.8).
+
 ### 3.10. Pacote
 
-- **Travado:** composição fixa após a venda; preço fixo; variação por porte/pelagem nas variantes.
-- **Personalizável:** montado na venda; desconto % opcional sobre o total.
+- **Travado:** composição fixa após a venda; preço fixo; variação por porte/pelagem definida em `PacoteVariante`.
+- **Personalizável:** montado na venda; desconto % opcional sobre o total calculado a partir das variantes escolhidas.
 
 ```
 Pacote
@@ -271,22 +289,36 @@ petshop_id
 nome
 descricao
 travado (bool)
-valor_total
-desconto_percentual
+desconto_percentual   -- só para pacotes personalizáveis
 validade
 ativo
 ```
 
+### 3.10.1. PacoteVariante
+
+Permite que **pacotes travados** tenham preço fixo distinto por combinação de porte/pelagem. Pacotes personalizáveis calculam o preço pela soma das variantes dos serviços escolhidos.
+
+```
+PacoteVariante
+---------
+id (UUID)
+pacote_id (FK Pacote)
+porte_id (FK Porte, opcional)
+pelagem_id (FK Pelagem, opcional)
+valor_total
+```
+
 ### 3.11. PacoteItem
 
-`quantidade_usada` reflecte créditos consumidos; cada débito em **Em andamento** regista-se em **`PacoteItemDebito`** (idempotente).
+- Cada item aponta para uma **`ServicoVariante`** (não apenas para o `Servico`), garantindo que porte, pelagem e preço estejam capturados no crédito.
+- `quantidade_usada` reflecte créditos consumidos; cada débito em **Em andamento** regista-se em **`PacoteItemDebito`** (idempotente).
 
 ```
 PacoteItem
 ---------
 id (UUID)
-pacote_id
-servico_id
+pacote_id (FK Pacote)
+servico_variante_id (FK ServicoVariante)   -- era servico_id; agora aponta para a variante
 quantidade_total
 quantidade_usada   -- mantido coerente com a soma dos débitos (atualizar na mesma transação que insere em PacoteItemDebito)
 ```
@@ -335,10 +367,11 @@ tutor_profile_id (FK TutorProfile)
 data_hora_inicio
 duracao_total_minutos
 banhista_id (opcional, FK PetshopUserProfile)   -- banhista **reservado** na agenda (slot); ver 3.15
+banhista_fixado_pelo_tutor (boolean, default false)   -- impede troca de banhista pelo atendente (RF07)
 status (enum — **única fonte de verdade** do ciclo de vida; ver 3.15)
 origem (tutor | atendente)
 pago (boolean)   -- indicador local; pagamento fora da plataforma
-precisa_transporte (boolean, default false)   -- alinhado ao fluxo do tutor (PRD §4.3)
+precisa_transporte (boolean, default false)   -- tutor indica se precisa de transporte (PRD §4.3)
 ```
 
 ### 3.14. AgendamentoServico (snapshot na marcação)
@@ -354,7 +387,7 @@ ordem
 
 ### 3.15. Atendimento
 
-Registo **operacional** da execução (1:1 com o agendamento). O tutor agenda **um** atendimento; o ciclo de vida (**status**) não se duplica: persiste **apenas** em `Agendamento`. A UI/API podem falar em “status do atendimento” como **alias** do status do agendamento.
+Registo **operacional** da execução (1:1 com o agendamento). O ciclo de vida (**status**) não se duplica: persiste **apenas** em `Agendamento`. A UI/API podem falar em “status do atendimento” como **alias** do status do agendamento.
 
 ```
 Atendimento
@@ -362,11 +395,25 @@ Atendimento
 id (UUID)
 agendamento_id (FK)
 banhista_id (FK PetshopUserProfile)   -- quem **executou** (pode diferir do `Agendamento.banhista_id` quando o tutor não fixou banhista e a loja realocou em silêncio)
-observacoes_internas
-observacoes_gerais
+observacoes_internas   -- visível apenas ao pet shop
+observacoes_gerais     -- visível ao tutor e ao pet shop
 ```
 
 **`banhista_id` em dois sítios:** `Agendamento.banhista_id` = ocupação de slot / intenção na marcação; `Atendimento.banhista_id` = responsável pela execução registada (auditoria e histórico). Quando não há troca silenciosa, os dois coincidem.
+
+### 3.15.1. AtendimentoServico
+
+Tabela de join para serviços do atendimento. Unifica o snapshot do agendamento e os adicionais incluídos durante a execução (RF08, seção 4.6). O campo `origem` distingue os dois casos.
+
+```
+AtendimentoServico
+---------
+id (UUID)
+atendimento_id (FK Atendimento)
+servico_variante_id (FK ServicoVariante)
+origem (agendamento | balcao)   -- “agendamento” = copiado do snapshot; “balcao” = adicionado durante execução
+ordem
+```
 
 **Estados canônicos (só em `Agendamento.status`):** `Aguardando confirmacao` → `Confirmado` → (`Em andamento` | `Atrasado` | `Pronto`) → `Finalizado`; `Cancelado` conforme regras.
 
@@ -429,11 +476,14 @@ metadata (jsonb)    -- snapshot opcional: antes/depois, IP, correlação com e-m
 - **1 TutorProfile → N PetTutor → N Pets**; **1 TutorProfile → N PetTutorConvite** (como convitador); convites referenciam `pet_id` e `convidado_email` até aceite
 - **1 PetShop → N funcionários** (`PetshopUserProfile`)
 - **1 PetShop → N Servicos / Pacotes / Agendamentos**
+- **1 PetShop → N CategoriaServico**; **1 CategoriaServico → N Servicos**
 - **TipoAnimal / Raca / Porte / Pelagem** → referenciados por **Pet** (`tipo_animal_id` **obrigatório**; `raca` também exige tipo) e (parcialmente) por **ServicoVariante**
 - **1 Agendamento** → **1 Pet** + **1 PetShop** + **1 TutorProfile** (cliente do agendamento) + **N AgendamentoServico**
 - **1 Agendamento → 1 Atendimento**
-- **1 Atendimento** → serviços executados (variantes; baseline + adicionais no balcão)
-- **1 Agendamento** → **N PacoteItemDebito** (0..N) quando há débito de pacote; cada débito referencia **PacoteItem** + **PacotePet**
+- **1 Atendimento → N AtendimentoServico → N ServicoVariante** (serviços do snapshot + adicionais no balcão)
+- **1 Agendamento → N PacoteItemDebito** (0..N) quando há débito de pacote; cada débito referencia **PacoteItem** + **PacotePet**
+- **1 Pacote → N PacoteVariante** (preço por porte/pelagem, para pacotes travados)
+- **1 PacoteItem → 1 ServicoVariante** (não apenas `Servico`)
 - **User** → **RegistroOperacional** como `actor_user_id`; entidades alvo em `entity_type` / `entity_id`
 
 ---
@@ -451,7 +501,8 @@ metadata (jsonb)    -- snapshot opcional: antes/depois, IP, correlação com e-m
 
 ### Serviços
 
-- Variantes por porte/raça/pelagem; snapshot no agendamento
+- Agrupados por `CategoriaServico` (opcional); variantes por porte/raça/pelagem; snapshot no agendamento
+- Serviços adicionados durante execução registrados em `AtendimentoServico` com `origem = balcao`
 - **Dependência no mesmo atendimento** (ex.: hidratação exige banho): **nice to have** — ver secção 7
 
 ### Notificações
@@ -493,6 +544,18 @@ Cada módulo (padrão sugerido): **resolvers** GraphQL (Yoga), serviços de dom�
 | --- | --- |
 | **Dependência entre serviços** | Regra do tipo: “não executar serviço B sem serviço A no **mesmo** atendimento”. Pode evoluir para tabela `ServicoDependencia(servico_id, exige_servico_id)` + validação na confirmação do agendamento / no atendimento. |
 | **Push (FCM)** | Mesmos eventos do e-mail, quando priorizado. |
+
+## 8. Histórico de alterações do modelo
+
+| Data | Alteração |
+| --- | --- |
+| 2026-06-16 | Adicionada `CategoriaServico` para agrupamento de serviços (PRD 4.6). |
+| 2026-06-16 | `PacoteItem.servico_id` → `servico_variante_id`: pacotes agora referenciam a variante específica, não apenas o serviço genérico — necessário para débito correto de créditos por porte/pelagem. |
+| 2026-06-16 | Adicionada `PacoteVariante`: precificação de pacotes travados por combinação de porte/pelagem (análogo a `ServicoVariante`). Removido `valor_total` fixo de `Pacote`. |
+| 2026-06-16 | Adicionada `AtendimentoServico`: join table para serviços do atendimento (snapshot do agendamento + adicionais no balcão), substituindo a aresta solta `Atendimento → ServicoVariante` do diagrama original. |
+| 2026-06-16 | `Agendamento` ganha `precisa_transporte (boolean)` (PRD 4.3) e `banhista_fixado_pelo_tutor (boolean)` (RF07). |
+| 2026-06-16 | `Pet.obs_compartilhadas` alterado de `text` para `jsonb` keyed por `petshop_id`, para preservar autoria por pet shop e cumprir RF02.5. |
+| 2026-06-16 | Removido `Atendimento.status` — `Agendamento.status` é a única fonte de verdade dos estados canônicos. |
 
 ---
 
@@ -616,22 +679,36 @@ erDiagram
         float preco
     }
 
+    CategoriaServico {
+        UUID id
+        UUID petshop_id
+        string nome
+        boolean ativo
+    }
+
     Pacote {
         UUID id
         UUID petshop_id
         string nome
         string descricao
         boolean travado
-        float valor_total
         float desconto_percentual
         date validade
         boolean ativo
     }
 
+    PacoteVariante {
+        UUID id
+        UUID pacote_id
+        UUID porte_id
+        UUID pelagem_id
+        float valor_total
+    }
+
     PacoteItem {
         UUID id
         UUID pacote_id
-        UUID servico_id
+        UUID servico_variante_id
         int quantidade_total
         int quantidade_usada
     }
@@ -661,6 +738,7 @@ erDiagram
         datetime data_hora_inicio
         int duracao_total_minutos
         UUID banhista_id
+        boolean banhista_fixado_pelo_tutor
         string status
         string origem
         boolean pago
@@ -680,6 +758,14 @@ erDiagram
         UUID banhista_id
         string observacoes_internas
         string observacoes_gerais
+    }
+
+    AtendimentoServico {
+        UUID id
+        UUID atendimento_id
+        UUID servico_variante_id
+        string origem
+        int ordem
     }
 
     BloqueioAgenda {
@@ -730,15 +816,24 @@ erDiagram
     Pelagem ||--o{ Pet : pelagem
 
     PetShop ||--o{ PetshopUserProfile : funcionarios
+    PetShop ||--o{ CategoriaServico : categorias
     PetShop ||--o{ Servico : oferece
     PetShop ||--o{ Pacote : vende
     PetShop ||--o{ Agendamento : recebe
     PetShop ||--o{ BloqueioAgenda : configura
     PetShop ||--o{ RegistroOperacional : contexto
 
+    CategoriaServico ||--o{ Servico : agrupa
+
     Servico ||--o{ ServicoVariante : varia
+    Pacote ||--o{ PacoteVariante : precifica
     Pacote ||--o{ PacoteItem : contem
     Pacote ||--o{ PacotePet : pets
+
+    PacoteItem }o--|| ServicoVariante : variante
+
+    Porte ||--o{ PacoteVariante : porte
+    Pelagem ||--o{ PacoteVariante : pelagem
 
     Pet ||--o{ PacotePet : pacotes
     Pet ||--o{ Agendamento : agenda
@@ -749,7 +844,8 @@ erDiagram
     AgendamentoServico }o--|| ServicoVariante : variante
 
     Agendamento ||--|| Atendimento : gera
-    Atendimento ||--o{ ServicoVariante : executa
+    Atendimento ||--o{ AtendimentoServico : servicos
+    AtendimentoServico }o--|| ServicoVariante : variante
 
     Agendamento ||--o{ PacoteItemDebito : debita
     PacotePet ||--o{ PacoteItemDebito : instancia
@@ -788,9 +884,11 @@ flowchart LR
     end
 
     subgraph ServicosPacotes["Servicos & Pacotes"]
+        CS[CategoriaServico]
         S[Servico]
         SV[ServicoVariante]
         PAC[Pacote]
+        PV[PacoteVariante]
         PI[PacoteItem]
         PID[PacoteItemDebito]
         PP[PacotePet]
@@ -800,6 +898,7 @@ flowchart LR
         AG[Agendamento]
         AS[AgendamentoServico]
         AT[Atendimento]
+        ATS[AtendimentoServico]
     end
 
     subgraph Notif["Notificacoes"]
@@ -825,14 +924,18 @@ flowchart LR
     PET --> PTC
 
     PS --> PUP
+    PS --> CS
     PS --> S
     PS --> PAC
     PS --> AG
     PS --> BA
 
+    CS --> S
     S --> SV
+    PAC --> PV
     PAC --> PI
     PAC --> PP
+    PI --> SV
     PI --> PID
     PP --> PID
 
@@ -842,6 +945,8 @@ flowchart LR
     AS --> SV
     AG --> AT
     AG --> PID
+    AT --> ATS
+    ATS --> SV
 
     U --> NO
     U --> RO
