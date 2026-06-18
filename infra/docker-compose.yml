@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: patafy
+      POSTGRES_PASSWORD: patafy
+      POSTGRES_DB: patafy
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U patafy"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://patafy:patafy@postgres:5432/patafy
+      PORT: 3000
+      HOST: 0.0.0.0
+      CORS_ORIGIN_TUTOR: http://localhost:5173
+      CORS_ORIGIN_PETSHOP: http://localhost:5174
+      CORS_ORIGIN_ADMIN: http://localhost:5175
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../apps/api/src:/app/apps/api/src
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://patafy:patafy@postgres:5432/patafy
+      POLL_INTERVAL_MS: 5000
+      RESEND_API_KEY: ${RESEND_API_KEY}
+    volumes:
+      - ../apps/worker/src:/app/apps/worker/src
+
+volumes:
+  postgres_data:
