@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route } from 'react-router'
 
 function HomePage() {
   return <h1>Patafy — Área do Tutor</h1>
