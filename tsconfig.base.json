@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "bundler",
+    "emitDecoratorMetadata": false,
+    "experimentalDecorators": false,
+    "importHelpers": false,
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@patafy/shared-types": ["packages/shared-types/src/index.ts"],
+      "@patafy/db": ["packages/db/src/index.ts"],
+      "@patafy/graphql-client": ["packages/graphql-client/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}
