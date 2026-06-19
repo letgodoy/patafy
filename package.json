@@ -1,0 +1,31 @@
+{
+  "name": "patafy",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev:api": "nx serve api",
+    "dev:worker": "nx serve worker",
+    "dev:tutor": "nx serve web-tutor",
+    "dev:petshop": "nx serve web-petshop",
+    "dev:admin": "nx serve web-admin",
+    "build": "nx run-many -t build",
+    "lint": "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck",
+    "test": "nx run-many -t test",
+    "db:generate": "nx run db:generate",
+    "db:migrate": "nx run db:migrate",
+    "db:studio": "nx run db:studio"
+  },
+  "devDependencies": {
+    "@nx/eslint": "^21.0.0",
+    "@nx/js": "^21.0.0",
+    "@nx/vite": "^21.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "nx": "^21.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.5.0"
+  }
+}

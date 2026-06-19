@@ -1,0 +1,1 @@
+// módulo: catalogo-global

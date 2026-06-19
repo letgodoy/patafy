@@ -1,0 +1,37 @@
+# deps
+node_modules
+.pnp
+.pnp.js
+
+# build
+dist
+build
+.nx/cache
+.nx/workspace-data
+
+# env
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+
+# test
+coverage
+
+# prisma generated
+packages/db/src/generated
+
+# graphql generated
+packages/graphql-client/src/generated
