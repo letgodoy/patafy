@@ -1,7 +1,9 @@
 import Fastify from 'fastify'
+import rateLimit from '@fastify/rate-limit'
 import { createYoga } from 'graphql-yoga'
 import { prisma } from './lib/prisma.js'
 import { schema } from './schema.js'
+import { buildContext } from './context.js'
 
 const PORT = Number(process.env['PORT'] ?? 3000)
 const HOST = process.env['HOST'] ?? '0.0.0.0'
@@ -14,6 +16,8 @@ const CORS_ORIGINS = [
 
 async function bootstrap() {
   const app = Fastify({ logger: true })
+
+  await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 
   // Health checks
   app.get('/health/live', async () => ({ status: 'ok' }))
@@ -35,18 +39,14 @@ async function bootstrap() {
       origin: CORS_ORIGINS,
       credentials: true,
     },
-    context: () => ({ prisma }),
+    context: ({ request }) => buildContext(request, prisma),
   })
 
   app.route({
     url: '/graphql',
     method: ['GET', 'POST', 'OPTIONS'],
     handler: async (req, reply) => {
-      const response = await yoga.handleNodeRequestAndResponse(req, reply, {
-        req,
-        reply,
-        prisma,
-      })
+      const response = await yoga.handleNodeRequestAndResponse(req, reply)
       response.headers.forEach((value, key) => reply.header(key, value))
       reply.status(response.status)
       reply.send(response.body)

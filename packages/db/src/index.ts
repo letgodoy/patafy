@@ -1,4 +1,5 @@
 export { PrismaClient } from './generated/prisma/index.js'
+export { PetshopUserRole, AgendamentoStatus, AgendamentoOrigem, PetTutorTipo, ConviteStatus, NotificacaoCanal, NotificacaoTipo, NotificacaoStatus, AtendimentoServicoOrigem } from './generated/prisma/index.js'
 export type {
   User,
   TutorProfile,

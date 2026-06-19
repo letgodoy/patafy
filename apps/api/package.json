@@ -11,10 +11,13 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^10.0.0",
     "@graphql-yoga/plugin-response-cache": "^3.0.0",
     "@patafy/db": "workspace:*",
     "@patafy/shared-types": "workspace:*",
     "fastify": "^5.0.0",
+    "fastify-plugin": "^5.0.0",
+    "firebase-admin": "^13.0.0",
     "graphql": "^16.0.0",
     "graphql-yoga": "^5.0.0",
     "zod": "^3.0.0"

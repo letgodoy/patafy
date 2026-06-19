@@ -1,14 +1,24 @@
 import { createSchema } from 'graphql-yoga'
+import type { GraphQLContext } from './context.js'
+import { authTypeDefs, authResolvers } from './modules/auth/index.js'
 
-export const schema = createSchema({
-  typeDefs: /* GraphQL */ `
-    type Query {
-      health: String!
-    }
-  `,
-  resolvers: {
-    Query: {
-      health: () => 'ok',
-    },
+const baseTypeDefs = /* GraphQL */ `
+  type Query {
+    health: String!
+  }
+
+  type Mutation {
+    _empty: String
+  }
+`
+
+const baseResolvers = {
+  Query: {
+    health: () => 'ok',
   },
+}
+
+export const schema = createSchema<GraphQLContext>({
+  typeDefs: [baseTypeDefs, authTypeDefs],
+  resolvers: [baseResolvers, authResolvers],
 })
