@@ -49,14 +49,13 @@ function TiposPageInner() {
   const abrirEdicao = (t: TipoAnimal) => {
     setEditando(t)
     setNome(t.nome)
-    setOrdem(t.ordem != null ? String(t.ordem) : '')
     setMostrarForm(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
-    const input = { nome: nome.trim(), ...(ordem ? { ordem: parseInt(ordem) } : {}) }
+    const input = { nome: nome.trim() }
     const result = editando
       ? await updateTipo({ id: editando.id, input })
       : await createTipo({ input })
@@ -84,10 +83,6 @@ function TiposPageInner() {
             <div>
               <label style={labelStyle}>Nome *</label>
               <input value={nome} onChange={(e) => setNome(e.target.value)} required style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Ordem</label>
-              <input type="number" value={ordem} onChange={(e) => setOrdem(e.target.value)} style={{ ...inputStyle, width: 80 }} />
             </div>
           </div>
           {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}

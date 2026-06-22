@@ -33,13 +33,13 @@ function PelagensPageInner() {
   const resetForm = () => { setNome(''); setOrdem(''); setErro(''); setEditando(null); setMostrarForm(false) }
 
   const abrirEdicao = (p: Pelagem) => {
-    setEditando(p); setNome(p.nome); setOrdem(p.ordem != null ? String(p.ordem) : ''); setMostrarForm(true)
+    setEditando(p); setNome(p.nome); setMostrarForm(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
-    const input = { nome: nome.trim(), ...(ordem ? { ordem: parseInt(ordem) } : {}) }
+    const input = { nome: nome.trim() }
     const result = editando ? await updatePelagem({ id: editando.id, input }) : await createPelagem({ input })
     if (result.error) { setErro(result.error.graphQLErrors[0]?.message ?? 'Erro ao salvar'); return }
     reexecute({ requestPolicy: 'network-only' })
@@ -65,10 +65,6 @@ function PelagensPageInner() {
             <div>
               <label style={labelStyle}>Nome *</label>
               <input value={nome} onChange={(e) => setNome(e.target.value)} required style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Ordem</label>
-              <input type="number" value={ordem} onChange={(e) => setOrdem(e.target.value)} style={{ ...inputStyle, width: 80 }} />
             </div>
           </div>
           {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}

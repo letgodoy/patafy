@@ -53,7 +53,6 @@ function RacasPageInner() {
   const abrirEdicao = (r: Raca) => {
     setEditando(r)
     setNome(r.nome)
-    setOrdem(r.ordem != null ? String(r.ordem) : '')
     setTipoAnimalId(r.tipoAnimalId)
     setMostrarForm(true)
   }
@@ -63,8 +62,8 @@ function RacasPageInner() {
     setErro('')
     if (!tipoAnimalId && !editando) { setErro('Selecione um tipo de animal'); return }
     const input = editando
-      ? { nome: nome.trim(), ...(ordem ? { ordem: parseInt(ordem) } : {}) }
-      : { tipoAnimalId, nome: nome.trim(), ...(ordem ? { ordem: parseInt(ordem) } : {}) }
+      ? { nome: nome.trim() }
+      : { tipoAnimalId, nome: nome.trim() }
     const result = editando
       ? await updateRaca({ id: editando.id, input })
       : await createRaca({ input })
@@ -107,10 +106,6 @@ function RacasPageInner() {
             <div>
               <label style={labelStyle}>Nome *</label>
               <input value={nome} onChange={(e) => setNome(e.target.value)} required style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Ordem</label>
-              <input type="number" value={ordem} onChange={(e) => setOrdem(e.target.value)} style={{ ...inputStyle, width: 80 }} />
             </div>
           </div>
           {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}
