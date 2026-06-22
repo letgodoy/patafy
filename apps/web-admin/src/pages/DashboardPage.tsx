@@ -1,13 +1,14 @@
 import { useAuth } from '../contexts/AuthContext.js'
+import { Layout } from '../components/Layout.js'
 
 export function DashboardPage() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
 
   return (
-    <main>
-      <h1>Dashboard — Administração Patafy</h1>
+    <Layout>
+      <h1 style={{ marginTop: 0 }}>Dashboard — Administração Patafy</h1>
       <p>Bem-vindo, {user?.displayName ?? user?.email}</p>
-      <button onClick={signOut}>Sair</button>
-    </main>
+      <p style={{ color: '#666', fontSize: 14 }}>Use o menu lateral para gerenciar o catálogo e os administradores.</p>
+    </Layout>
   )
 }
