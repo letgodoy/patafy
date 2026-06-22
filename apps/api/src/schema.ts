@@ -1,6 +1,7 @@
 import { createSchema } from 'graphql-yoga'
 import type { GraphQLContext } from './context.js'
 import { authTypeDefs, authResolvers } from './modules/auth/index.js'
+import { catalogoGlobalTypeDefs, catalogoGlobalResolvers } from './modules/catalogo-global/index.js'
 
 const baseTypeDefs = /* GraphQL */ `
   type Query {
@@ -19,6 +20,6 @@ const baseResolvers = {
 }
 
 export const schema = createSchema<GraphQLContext>({
-  typeDefs: [baseTypeDefs, authTypeDefs],
-  resolvers: [baseResolvers, authResolvers],
+  typeDefs: [baseTypeDefs, authTypeDefs, catalogoGlobalTypeDefs],
+  resolvers: [baseResolvers, authResolvers, catalogoGlobalResolvers],
 })
