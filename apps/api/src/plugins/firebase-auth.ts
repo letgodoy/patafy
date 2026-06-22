@@ -26,8 +26,8 @@ export const firebaseAuthPlugin = fp(async (fastify) => {
     if (!header?.startsWith('Bearer ')) return
     try {
       request.firebaseUser = await admin.auth().verifyIdToken(header.slice(7))
-    } catch {
-      // token inválido — resolvers verificam ctx.user
+    } catch (err) {
+      fastify.log.warn({ err }, 'firebase token inválido')
     }
   })
 })

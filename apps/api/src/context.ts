@@ -22,8 +22,8 @@ export async function buildContext(
   if (authHeader?.startsWith('Bearer ')) {
     try {
       firebaseUser = await admin.auth().verifyIdToken(authHeader.slice(7))
-    } catch {
-      // token inválido — resolvers verificam ctx.user
+    } catch (err) {
+      console.warn('firebase token inválido', err)
     }
   }
 
