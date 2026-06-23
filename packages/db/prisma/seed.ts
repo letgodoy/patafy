@@ -98,6 +98,7 @@ const tiposEracas: { tipo: string; ordem: number; racas: string[] }[] = [
       'Border Terrier',
       'Fox Terrier',
       'Airedale Terrier',
+      'Scottish Terrier',
     ],
   },
   {
