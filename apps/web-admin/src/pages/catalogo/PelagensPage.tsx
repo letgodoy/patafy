@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { gqlClient } from '../../lib/graphql-client.js'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
 import type {
-  PelagensQuery, PelagensQueryVariables,
+  PelagensQuery,
   CreatePelagemMutation, CreatePelagemMutationVariables,
   UpdatePelagemMutation, UpdatePelagemMutationVariables,
   SetCatalogItemAtivoMutationVariables,
@@ -16,37 +19,36 @@ const CREATE_PELAGEM = /* GraphQL */ `mutation CreatePelagem($input: CreatePelag
 const UPDATE_PELAGEM = /* GraphQL */ `mutation UpdatePelagem($id: ID!, $input: UpdatePelagemInput!) { updatePelagem(id: $id, input: $input) { id nome ativo ordem } }`
 const SET_ATIVO = /* GraphQL */ `mutation SetCatalogItemAtivo($tipo: String!, $id: ID!, $ativo: Boolean!) { setCatalogItemAtivo(tipo: $tipo, id: $id, ativo: $ativo) }`
 
+const schema = z.object({ nome: z.string().min(1, 'Nome é obrigatório') })
+type FormData = z.infer<typeof schema>
+
 type PelagemRow = Pick<Pelagem, 'id' | 'nome' | 'ativo' | 'ordem'>
 
 export function PelagensPage() {
   const qc = useQueryClient()
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['pelagens'],
-    queryFn: () => gqlClient.request<PelagensQuery>(PELAGENS_QUERY),
-  })
+  const { data, isLoading, error } = useQuery({ queryKey: ['pelagens'], queryFn: () => gqlClient.request<PelagensQuery>(PELAGENS_QUERY) })
   const invalidate = () => qc.invalidateQueries({ queryKey: ['pelagens'] })
   const createMutation = useMutation({ mutationFn: (vars: CreatePelagemMutationVariables) => gqlClient.request<CreatePelagemMutation>(CREATE_PELAGEM, vars), onSuccess: invalidate })
   const updateMutation = useMutation({ mutationFn: (vars: UpdatePelagemMutationVariables) => gqlClient.request<UpdatePelagemMutation>(UPDATE_PELAGEM, vars), onSuccess: invalidate })
   const setAtivoMutation = useMutation({ mutationFn: (vars: SetCatalogItemAtivoMutationVariables) => gqlClient.request(SET_ATIVO, vars), onSuccess: invalidate })
 
   const [editando, setEditando] = useState<PelagemRow | null>(null)
-  const [nome, setNome] = useState('')
-  const [erro, setErro] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
 
-  const resetForm = () => { setNome(''); setErro(''); setEditando(null); setMostrarForm(false) }
-  const abrirEdicao = (p: PelagemRow) => { setEditando(p); setNome(p.nome); setMostrarForm(true) }
+  const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { nome: '' } })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setErro('')
+  const resetForm = () => { setEditando(null); form.reset(); setMostrarForm(false) }
+  const abrirEdicao = (p: PelagemRow) => { setEditando(p); form.reset({ nome: p.nome }); setMostrarForm(true) }
+
+  const onSubmit = form.handleSubmit(async (data) => {
     try {
-      if (editando) await updateMutation.mutateAsync({ id: editando.id, input: { nome: nome.trim() } })
-      else await createMutation.mutateAsync({ input: { nome: nome.trim() } })
+      if (editando) await updateMutation.mutateAsync({ id: editando.id, input: { nome: data.nome.trim() } })
+      else await createMutation.mutateAsync({ input: { nome: data.nome.trim() } })
       resetForm()
     } catch (err: unknown) {
-      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao salvar')
+      form.setError('root', { message: (err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao salvar' })
     }
-  }
+  })
 
   const columns: Column<PelagemRow>[] = [
     { key: 'nome', header: 'Nome', render: (p) => p.nome },
@@ -69,11 +71,15 @@ export function PelagensPage() {
     <>
       <PageHeader title="Pelagens" action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Nova Pelagem</button>} />
       {mostrarForm && (
-        <FormCard title={editando ? 'Editar Pelagem' : 'Nova Pelagem'} onSubmit={handleSubmit}>
+        <FormCard title={editando ? 'Editar Pelagem' : 'Nova Pelagem'} onSubmit={onSubmit}>
           <div style={{ display: 'flex', gap: 12 }}>
-            <div><label style={labelStyle}>Nome *</label><input value={nome} onChange={(e) => setNome(e.target.value)} required style={inputStyle} /></div>
+            <div>
+              <label style={labelStyle}>Nome *</label>
+              <input {...form.register('nome')} style={inputStyle} />
+              {form.formState.errors.nome && <p style={{ color: 'red', margin: '4px 0 0', fontSize: 13 }}>{form.formState.errors.nome.message}</p>}
+            </div>
           </div>
-          {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}
+          {form.formState.errors.root && <p style={{ color: 'red', margin: '8px 0 0' }}>{form.formState.errors.root.message}</p>}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             <button type="submit" style={btnPrimary}>Salvar</button>
             <button type="button" onClick={resetForm} style={btnSecondary}>Cancelar</button>

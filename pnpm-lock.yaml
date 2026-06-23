@@ -84,6 +84,9 @@ importers:
       '@ark-ui/react':
         specifier: ^5.0.0
         version: 5.37.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@hookform/resolvers':
+        specifier: ^5.4.0
+        version: 5.4.0(react-hook-form@7.80.0(react@19.2.7))
       '@patafy/graphql-client':
         specifier: workspace:*
         version: link:../../packages/graphql-client
@@ -111,9 +114,15 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
+      react-hook-form:
+        specifier: ^7.80.0
+        version: 7.80.0(react@19.2.7)
       react-router:
         specifier: ^8.0.0
         version: 8.0.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/react':
         specifier: ^19.0.0
@@ -133,6 +142,9 @@ importers:
       '@ark-ui/react':
         specifier: ^5.0.0
         version: 5.37.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@hookform/resolvers':
+        specifier: ^5.4.0
+        version: 5.4.0(react-hook-form@7.80.0(react@19.2.7))
       '@patafy/graphql-client':
         specifier: workspace:*
         version: link:../../packages/graphql-client
@@ -160,9 +172,15 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
+      react-hook-form:
+        specifier: ^7.80.0
+        version: 7.80.0(react@19.2.7)
       react-router:
         specifier: ^8.0.0
         version: 8.0.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/react':
         specifier: ^19.0.0
@@ -182,6 +200,9 @@ importers:
       '@ark-ui/react':
         specifier: ^5.0.0
         version: 5.37.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@hookform/resolvers':
+        specifier: ^5.4.0
+        version: 5.4.0(react-hook-form@7.80.0(react@19.2.7))
       '@patafy/graphql-client':
         specifier: workspace:*
         version: link:../../packages/graphql-client
@@ -209,9 +230,15 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.7(react@19.2.7)
+      react-hook-form:
+        specifier: ^7.80.0
+        version: 7.80.0(react@19.2.7)
       react-router:
         specifier: ^8.0.0
         version: 8.0.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/react':
         specifier: ^19.0.0
@@ -1990,6 +2017,11 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
+  '@hookform/resolvers@5.4.0':
+    resolution: {integrity: sha512-EIsqr/t/qbinPIhGjMdtvutIN1Kk4uwbROE9/UQ93CAVGR7GkA7Y92+fX80OzXi/OB67jVFYwKGO1WzkxmkFZw==}
+    peerDependencies:
+      react-hook-form: ^7.55.0
+
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
     engines: {node: '>=18.18.0'}
@@ -2381,6 +2413,9 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@standard-schema/utils@0.3.0':
+    resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
 
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
@@ -4446,6 +4481,12 @@ packages:
     resolution: {integrity: sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ==}
     peerDependencies:
       react: ^19.2.7
+
+  react-hook-form@7.80.0:
+    resolution: {integrity: sha512-4P+fk6oXsxY+6xSj7Euhc2sumQD8zQqCuVHoJwoyp9EchP+IUW9OESB7uHFJOKsIBQ4MQqYE84INJFqUCYNoOg==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      react: ^16.8.0 || ^17 || ^18 || ^19
 
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
@@ -7231,6 +7272,11 @@ snapshots:
       yargs: 17.7.2
     optional: true
 
+  '@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7))':
+    dependencies:
+      '@standard-schema/utils': 0.3.0
+      react-hook-form: 7.80.0(react@19.2.7)
+
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
@@ -7601,6 +7647,8 @@ snapshots:
   '@sinclair/typebox@0.34.49': {}
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@standard-schema/utils@0.3.0': {}
 
   '@swc/helpers@0.5.23':
     dependencies:
@@ -10350,6 +10398,10 @@ snapshots:
     dependencies:
       react: 19.2.7
       scheduler: 0.27.0
+
+  react-hook-form@7.80.0(react@19.2.7):
+    dependencies:
+      react: 19.2.7
 
   react-is@18.3.1: {}
 

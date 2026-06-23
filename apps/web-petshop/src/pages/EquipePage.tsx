@@ -1,38 +1,32 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { gqlClient } from '../lib/graphql-client.js'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
 
-const MY_PETSHOP_ID = /* GraphQL */ `
-  query MyPetShopId { myPetShop { id } }
-`
-
-const LIST_STAFF = /* GraphQL */ `
-  query ListStaff($petshopId: ID!) {
-    listStaff(petshopId: $petshopId) { id nome email roles ativo createdAt }
-  }
-`
-
-const CREATE_STAFF = /* GraphQL */ `
-  mutation CreateStaff($input: CreateStaffInput!) {
-    createStaff(input: $input) { id nome email roles ativo createdAt }
-  }
-`
-
-const UPDATE_STAFF = /* GraphQL */ `
-  mutation UpdateStaff($id: ID!, $input: UpdateStaffInput!) {
-    updateStaff(id: $id, input: $input) { id nome email roles ativo }
-  }
-`
-
-const DEACTIVATE_STAFF = /* GraphQL */ `
-  mutation DeactivateStaff($id: ID!) { deactivateStaff(id: $id) }
-`
+const MY_PETSHOP_ID = /* GraphQL */ `query MyPetShopId { myPetShop { id } }`
+const LIST_STAFF = /* GraphQL */ `query ListStaff($petshopId: ID!) { listStaff(petshopId: $petshopId) { id nome email roles ativo createdAt } }`
+const CREATE_STAFF = /* GraphQL */ `mutation CreateStaff($input: CreateStaffInput!) { createStaff(input: $input) { id nome email roles ativo createdAt } }`
+const UPDATE_STAFF = /* GraphQL */ `mutation UpdateStaff($id: ID!, $input: UpdateStaffInput!) { updateStaff(id: $id, input: $input) { id nome email roles ativo } }`
+const DEACTIVATE_STAFF = /* GraphQL */ `mutation DeactivateStaff($id: ID!) { deactivateStaff(id: $id) }`
 
 type StaffMember = { id: string; nome: string; email: string; roles: string[]; ativo: boolean; createdAt: string }
 
 const ROLE_LABELS: Record<string, string> = { owner: 'Owner', atendente: 'Atendente', banhista: 'Banhista' }
+
+const staffSchema = z.object({
+  nome: z.string().min(1, 'Nome é obrigatório'),
+  cpf: z.string().optional(),
+  email: z.string().optional(),
+  telefone: z.string().optional(),
+  senha: z.string().optional(),
+  rolesAtendente: z.boolean(),
+  rolesBanhista: z.boolean(),
+})
+type FormData = z.infer<typeof staffSchema>
 
 export function EquipePage() {
   const qc = useQueryClient()
@@ -50,65 +44,50 @@ export function EquipePage() {
   })
   const invalidate = () => qc.invalidateQueries({ queryKey: ['staff', petshopId] })
 
-  const createStaffMutation = useMutation({
-    mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(CREATE_STAFF, vars),
-    onSuccess: invalidate,
-  })
-  const updateStaffMutation = useMutation({
-    mutationFn: (vars: { id: string; input: Record<string, unknown> }) => gqlClient.request(UPDATE_STAFF, vars),
-    onSuccess: invalidate,
-  })
-  const deactivateStaffMutation = useMutation({
-    mutationFn: (id: string) => gqlClient.request(DEACTIVATE_STAFF, { id }),
-    onSuccess: invalidate,
-  })
+  const createStaffMutation = useMutation({ mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(CREATE_STAFF, vars), onSuccess: invalidate })
+  const updateStaffMutation = useMutation({ mutationFn: (vars: { id: string; input: Record<string, unknown> }) => gqlClient.request(UPDATE_STAFF, vars), onSuccess: invalidate })
+  const deactivateStaffMutation = useMutation({ mutationFn: (id: string) => gqlClient.request(DEACTIVATE_STAFF, { id }), onSuccess: invalidate })
 
-  const [mostrarForm, setMostrarForm] = useState(false)
   const [editando, setEditando] = useState<StaffMember | null>(null)
-  const [nome, setNome] = useState('')
-  const [cpf, setCpf] = useState('')
-  const [email, setEmail] = useState('')
-  const [telefone, setTelefone] = useState('')
-  const [senha, setSenha] = useState('')
-  const [rolesAtendente, setRolesAtendente] = useState(false)
-  const [rolesBanhista, setRolesBanhista] = useState(false)
-  const [erro, setErro] = useState('')
+  const [mostrarForm, setMostrarForm] = useState(false)
 
-  const resetForm = () => {
-    setMostrarForm(false); setEditando(null)
-    setNome(''); setCpf(''); setEmail(''); setTelefone(''); setSenha('')
-    setRolesAtendente(false); setRolesBanhista(false); setErro('')
-  }
+  const form = useForm<FormData>({
+    resolver: zodResolver(staffSchema),
+    defaultValues: { nome: '', cpf: '', email: '', telefone: '', senha: '', rolesAtendente: false, rolesBanhista: false },
+  })
 
+  const resetForm = () => { setEditando(null); form.reset(); setMostrarForm(false) }
   const abrirEdicao = (m: StaffMember) => {
-    setEditando(m); setNome(m.nome)
-    setRolesAtendente(m.roles.includes('atendente')); setRolesBanhista(m.roles.includes('banhista'))
+    setEditando(m)
+    form.reset({ nome: m.nome, rolesAtendente: m.roles.includes('atendente'), rolesBanhista: m.roles.includes('banhista') })
     setMostrarForm(true)
   }
 
-  const buildRoles = () => {
+  const onSubmit = form.handleSubmit(async (data) => {
     const roles: string[] = []
-    if (rolesAtendente) roles.push('atendente')
-    if (rolesBanhista) roles.push('banhista')
-    return roles
-  }
+    if (data.rolesAtendente) roles.push('atendente')
+    if (data.rolesBanhista) roles.push('banhista')
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setErro('')
-    if (!editando && buildRoles().length === 0) { setErro('Selecione pelo menos um papel'); return }
+    if (!editando) {
+      if (!data.cpf) { form.setError('cpf', { message: 'CPF é obrigatório' }); return }
+      if (!data.email) { form.setError('email', { message: 'E-mail é obrigatório' }); return }
+      if (!data.senha || data.senha.length < 6) { form.setError('senha', { message: 'Senha deve ter pelo menos 6 caracteres' }); return }
+      if (roles.length === 0) { form.setError('root', { message: 'Selecione pelo menos um papel' }); return }
+    }
+
     try {
       if (editando) {
-        await updateStaffMutation.mutateAsync({ id: editando.id, input: { nome: nome.trim(), roles: buildRoles() } })
+        await updateStaffMutation.mutateAsync({ id: editando.id, input: { nome: data.nome.trim(), roles } })
       } else {
         await createStaffMutation.mutateAsync({
-          input: { petshopId, nome: nome.trim(), cpf: cpf.trim(), email: email.trim(), telefone: telefone.trim() || undefined, senha, roles: buildRoles() },
+          input: { petshopId, nome: data.nome.trim(), cpf: data.cpf!.trim(), email: data.email!.trim(), telefone: data.telefone?.trim() || undefined, senha: data.senha!, roles },
         })
       }
       resetForm()
     } catch (err: unknown) {
-      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao salvar')
+      form.setError('root', { message: (err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao salvar' })
     }
-  }
+  })
 
   const handleDeactivate = async (m: StaffMember) => {
     if (!confirm(`Desativar "${m.nome}"?`)) return
@@ -133,33 +112,51 @@ export function EquipePage() {
     },
   ]
 
+  const e = form.formState.errors
+
   return (
     <>
       <PageHeader title="Equipe" action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Novo Membro</button>} />
 
       {mostrarForm && (
-        <FormCard title={editando ? 'Editar Membro' : 'Novo Membro da Equipe'} onSubmit={handleSubmit}>
+        <FormCard title={editando ? 'Editar Membro' : 'Novo Membro da Equipe'} onSubmit={onSubmit}>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <div><label style={labelStyle}>Nome *</label><input value={nome} onChange={(e) => setNome(e.target.value)} required style={inputStyle} /></div>
+            <div>
+              <label style={labelStyle}>Nome *</label>
+              <input {...form.register('nome')} style={inputStyle} />
+              {e.nome && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.nome.message}</p>}
+            </div>
             {!editando && (
               <>
-                <div><label style={labelStyle}>CPF *</label><input value={cpf} onChange={(e) => setCpf(e.target.value)} required placeholder="000.000.000-00" style={inputStyle} /></div>
-                <div><label style={labelStyle}>E-mail *</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} /></div>
-                <div><label style={labelStyle}>Telefone</label><input value={telefone} onChange={(e) => setTelefone(e.target.value)} style={inputStyle} /></div>
-                <div><label style={labelStyle}>Senha *</label><input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={6} style={inputStyle} /></div>
+                <div>
+                  <label style={labelStyle}>CPF *</label>
+                  <input {...form.register('cpf')} placeholder="000.000.000-00" style={inputStyle} />
+                  {e.cpf && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.cpf.message}</p>}
+                </div>
+                <div>
+                  <label style={labelStyle}>E-mail *</label>
+                  <input type="email" {...form.register('email')} style={inputStyle} />
+                  {e.email && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.email.message}</p>}
+                </div>
+                <div><label style={labelStyle}>Telefone</label><input {...form.register('telefone')} style={inputStyle} /></div>
+                <div>
+                  <label style={labelStyle}>Senha *</label>
+                  <input type="password" {...form.register('senha')} style={inputStyle} />
+                  {e.senha && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.senha.message}</p>}
+                </div>
               </>
             )}
           </div>
           <div style={{ marginTop: 12 }}>
             <label style={labelStyle}>Papéis *</label>
             <label style={{ marginRight: 16, fontSize: 14 }}>
-              <input type="checkbox" checked={rolesAtendente} onChange={(e) => setRolesAtendente(e.target.checked)} /> Atendente
+              <input type="checkbox" {...form.register('rolesAtendente')} /> Atendente
             </label>
             <label style={{ fontSize: 14 }}>
-              <input type="checkbox" checked={rolesBanhista} onChange={(e) => setRolesBanhista(e.target.checked)} /> Banhista
+              <input type="checkbox" {...form.register('rolesBanhista')} /> Banhista
             </label>
           </div>
-          {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}
+          {e.root && <p style={{ color: 'red', margin: '8px 0 0' }}>{e.root.message}</p>}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             <button type="submit" style={btnPrimary}>Salvar</button>
             <button type="button" onClick={resetForm} style={btnSecondary}>Cancelar</button>
@@ -167,15 +164,7 @@ export function EquipePage() {
         </FormCard>
       )}
 
-      <DataTable
-        columns={columns}
-        data={data?.listStaff ?? []}
-        rowKey={(m) => m.id}
-        loading={isLoading || !petshopId}
-        error={error ? String(error) : undefined}
-        rowStyle={(m) => ({ opacity: m.ativo ? 1 : 0.5 })}
-        emptyText="Nenhum membro de equipe cadastrado."
-      />
+      <DataTable columns={columns} data={data?.listStaff ?? []} rowKey={(m) => m.id} loading={isLoading || !petshopId} error={error ? String(error) : undefined} rowStyle={(m) => ({ opacity: m.ativo ? 1 : 0.5 })} emptyText="Nenhum membro de equipe cadastrado." />
     </>
   )
 }

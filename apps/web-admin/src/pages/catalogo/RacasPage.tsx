@@ -1,11 +1,13 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { gqlClient } from '../../lib/graphql-client.js'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
 import type {
-  RacasQuery, RacasQueryVariables,
-  TiposAnimalQuery,
+  RacasQuery,
   CreateRacaMutation, CreateRacaMutationVariables,
   UpdateRacaMutation, UpdateRacaMutationVariables,
   SetCatalogItemAtivoMutationVariables,
@@ -22,13 +24,19 @@ const CREATE_RACA = /* GraphQL */ `mutation CreateRaca($input: CreateRacaInput!)
 const UPDATE_RACA = /* GraphQL */ `mutation UpdateRaca($id: ID!, $input: UpdateRacaInput!) { updateRaca(id: $id, input: $input) { id nome ativo ordem tipoAnimalId tipoAnimal { id nome } } }`
 const SET_ATIVO = /* GraphQL */ `mutation SetCatalogItemAtivo($tipo: String!, $id: ID!, $ativo: Boolean!) { setCatalogItemAtivo(tipo: $tipo, id: $id, ativo: $ativo) }`
 
+const schema = z.object({
+  tipoAnimalId: z.string(),
+  nome: z.string().min(1, 'Nome é obrigatório'),
+})
+type FormData = z.infer<typeof schema>
+
 type RacaRow = Pick<Raca, 'id' | 'nome' | 'ativo' | 'ordem' | 'tipoAnimalId'> & { tipoAnimal: { id: string; nome: string } }
 
 export function RacasPage() {
   const qc = useQueryClient()
   const { data, isLoading, error } = useQuery({
     queryKey: ['racas'],
-    queryFn: () => gqlClient.request<RacasQuery & TiposAnimalQuery>(RACAS_QUERY),
+    queryFn: () => gqlClient.request<RacasQuery & { tiposAnimal: { id: string; nome: string }[] }>(RACAS_QUERY),
   })
   const invalidate = () => qc.invalidateQueries({ queryKey: ['racas'] })
   const createMutation = useMutation({ mutationFn: (vars: CreateRacaMutationVariables) => gqlClient.request<CreateRacaMutation>(CREATE_RACA, vars), onSuccess: invalidate })
@@ -36,26 +44,27 @@ export function RacasPage() {
   const setAtivoMutation = useMutation({ mutationFn: (vars: SetCatalogItemAtivoMutationVariables) => gqlClient.request(SET_ATIVO, vars), onSuccess: invalidate })
 
   const [editando, setEditando] = useState<RacaRow | null>(null)
-  const [nome, setNome] = useState('')
-  const [tipoAnimalId, setTipoAnimalId] = useState('')
-  const [filtroTipo, setFiltroTipo] = useState('')
-  const [erro, setErro] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [filtroTipo, setFiltroTipo] = useState('')
 
-  const resetForm = () => { setNome(''); setTipoAnimalId(''); setErro(''); setEditando(null); setMostrarForm(false) }
-  const abrirEdicao = (r: RacaRow) => { setEditando(r); setNome(r.nome); setTipoAnimalId(r.tipoAnimalId); setMostrarForm(true) }
+  const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { tipoAnimalId: '', nome: '' } })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setErro('')
-    if (!tipoAnimalId && !editando) { setErro('Selecione um tipo de animal'); return }
+  const resetForm = () => { setEditando(null); form.reset(); setMostrarForm(false) }
+  const abrirEdicao = (r: RacaRow) => { setEditando(r); form.reset({ tipoAnimalId: r.tipoAnimalId, nome: r.nome }); setMostrarForm(true) }
+
+  const onSubmit = form.handleSubmit(async (data) => {
+    if (!editando && !data.tipoAnimalId) {
+      form.setError('tipoAnimalId', { message: 'Selecione um tipo de animal' })
+      return
+    }
     try {
-      if (editando) await updateMutation.mutateAsync({ id: editando.id, input: { nome: nome.trim() } })
-      else await createMutation.mutateAsync({ input: { tipoAnimalId, nome: nome.trim() } })
+      if (editando) await updateMutation.mutateAsync({ id: editando.id, input: { nome: data.nome.trim() } })
+      else await createMutation.mutateAsync({ input: { tipoAnimalId: data.tipoAnimalId, nome: data.nome.trim() } })
       resetForm()
     } catch (err: unknown) {
-      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao salvar')
+      form.setError('root', { message: (err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao salvar' })
     }
-  }
+  })
 
   const tipos = (data as { tiposAnimal?: { id: string; nome: string }[] } | undefined)?.tiposAnimal ?? []
   const racasFiltradas = ((data as { racas?: RacaRow[] } | undefined)?.racas ?? []).filter((r) => !filtroTipo || r.tipoAnimalId === filtroTipo)
@@ -83,20 +92,25 @@ export function RacasPage() {
       <PageHeader title="Raças" action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Nova Raça</button>} />
 
       {mostrarForm && (
-        <FormCard title={editando ? 'Editar Raça' : 'Nova Raça'} onSubmit={handleSubmit}>
+        <FormCard title={editando ? 'Editar Raça' : 'Nova Raça'} onSubmit={onSubmit}>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {!editando && (
               <div>
                 <label style={labelStyle}>Tipo de Animal *</label>
-                <select value={tipoAnimalId} onChange={(e) => setTipoAnimalId(e.target.value)} required style={inputStyle}>
+                <select {...form.register('tipoAnimalId')} style={inputStyle}>
                   <option value="">Selecione...</option>
                   {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
                 </select>
+                {form.formState.errors.tipoAnimalId && <p style={{ color: 'red', margin: '4px 0 0', fontSize: 13 }}>{form.formState.errors.tipoAnimalId.message}</p>}
               </div>
             )}
-            <div><label style={labelStyle}>Nome *</label><input value={nome} onChange={(e) => setNome(e.target.value)} required style={inputStyle} /></div>
+            <div>
+              <label style={labelStyle}>Nome *</label>
+              <input {...form.register('nome')} style={inputStyle} />
+              {form.formState.errors.nome && <p style={{ color: 'red', margin: '4px 0 0', fontSize: 13 }}>{form.formState.errors.nome.message}</p>}
+            </div>
           </div>
-          {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}
+          {form.formState.errors.root && <p style={{ color: 'red', margin: '8px 0 0' }}>{form.formState.errors.root.message}</p>}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             <button type="submit" style={btnPrimary}>Salvar</button>
             <button type="button" onClick={resetForm} style={btnSecondary}>Cancelar</button>

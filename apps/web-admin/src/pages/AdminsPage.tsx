@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { gqlClient } from '../lib/graphql-client.js'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, inputStyle, labelStyle } from '@patafy/ui'
@@ -12,6 +15,13 @@ import type {
 const ADMINS_QUERY = /* GraphQL */ `query ListSystemAdmins { listSystemAdmins { id email nome ativo createdAt } }`
 const CREATE_ADMIN = /* GraphQL */ `mutation CreateSystemAdmin($input: CreateSystemAdminInput!) { createSystemAdmin(input: $input) { id email nome ativo createdAt } }`
 
+const schema = z.object({
+  nome: z.string().min(1, 'Nome é obrigatório'),
+  email: z.string().email('E-mail inválido'),
+  senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+})
+type FormData = z.infer<typeof schema>
+
 type AdminRow = Pick<SystemAdminUser, 'id' | 'email' | 'nome' | 'ativo' | 'createdAt'>
 
 export function AdminsPage() {
@@ -22,28 +32,24 @@ export function AdminsPage() {
   })
   const createMutation = useMutation({
     mutationFn: (vars: CreateSystemAdminMutationVariables) => gqlClient.request<CreateSystemAdminMutation>(CREATE_ADMIN, vars),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['systemAdmins'] }); setSucesso(`Administrador criado com sucesso.`) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['systemAdmins'] }); setSucesso('Administrador criado com sucesso.') },
   })
 
-  const [nome, setNome] = useState('')
-  const [email, setEmail] = useState('')
-  const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState('')
-  const [sucesso, setSucesso] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [sucesso, setSucesso] = useState('')
 
-  const resetForm = () => { setNome(''); setEmail(''); setSenha(''); setErro(''); setMostrarForm(false) }
+  const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { nome: '', email: '', senha: '' } })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setErro(''); setSucesso('')
-    if (senha.length < 6) { setErro('Senha deve ter pelo menos 6 caracteres'); return }
+  const resetForm = () => { form.reset(); setMostrarForm(false) }
+
+  const onSubmit = form.handleSubmit(async (data) => {
     try {
-      await createMutation.mutateAsync({ input: { nome: nome.trim(), email: email.trim(), senha } })
+      await createMutation.mutateAsync({ input: { nome: data.nome.trim(), email: data.email.trim(), senha: data.senha } })
       resetForm()
     } catch (err: unknown) {
-      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar administrador')
+      form.setError('root', { message: (err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar administrador' })
     }
-  }
+  })
 
   const columns: Column<AdminRow>[] = [
     { key: 'nome', header: 'Nome', render: (a) => a.nome },
@@ -57,13 +63,25 @@ export function AdminsPage() {
       <PageHeader title="Administradores do Sistema" action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Novo Admin</button>} />
       {sucesso && <p style={{ color: 'green', background: '#f0fff0', padding: '8px 12px', borderRadius: 4, marginBottom: 16 }}>{sucesso}</p>}
       {mostrarForm && (
-        <FormCard title="Novo Administrador" onSubmit={handleSubmit}>
+        <FormCard title="Novo Administrador" onSubmit={onSubmit}>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <div><label style={labelStyle}>Nome *</label><input value={nome} onChange={(e) => setNome(e.target.value)} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>E-mail *</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>Senha *</label><input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={6} style={inputStyle} /></div>
+            <div>
+              <label style={labelStyle}>Nome *</label>
+              <input {...form.register('nome')} style={inputStyle} />
+              {form.formState.errors.nome && <p style={{ color: 'red', margin: '4px 0 0', fontSize: 13 }}>{form.formState.errors.nome.message}</p>}
+            </div>
+            <div>
+              <label style={labelStyle}>E-mail *</label>
+              <input type="email" {...form.register('email')} style={inputStyle} />
+              {form.formState.errors.email && <p style={{ color: 'red', margin: '4px 0 0', fontSize: 13 }}>{form.formState.errors.email.message}</p>}
+            </div>
+            <div>
+              <label style={labelStyle}>Senha *</label>
+              <input type="password" {...form.register('senha')} style={inputStyle} />
+              {form.formState.errors.senha && <p style={{ color: 'red', margin: '4px 0 0', fontSize: 13 }}>{form.formState.errors.senha.message}</p>}
+            </div>
           </div>
-          {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}
+          {form.formState.errors.root && <p style={{ color: 'red', margin: '8px 0 0' }}>{form.formState.errors.root.message}</p>}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             <button type="submit" style={btnPrimary}>Criar Administrador</button>
             <button type="button" onClick={resetForm} style={btnSecondary}>Cancelar</button>

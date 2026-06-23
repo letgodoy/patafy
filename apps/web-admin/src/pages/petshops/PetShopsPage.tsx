@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { gqlClient } from '../../lib/graphql-client.js'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
@@ -7,49 +10,51 @@ import type { Column } from '@patafy/ui'
 const LIST_PETSHOPS = /* GraphQL */ `
   query ListPetShops($filter: ListPetShopsFilter) {
     listPetShops(filter: $filter) {
-      id nomeExibicao cnpj cidade estado email ativo
-      configJson { slug }
-      createdAt
-    }
-  }
-`
-
-const CREATE_PETSHOP = /* GraphQL */ `
-  mutation CreatePetShop($input: CreatePetShopInput!) {
-    createPetShop(input: $input) {
       id nomeExibicao cnpj cidade estado email ativo configJson { slug } createdAt
     }
   }
 `
-
+const CREATE_PETSHOP = /* GraphQL */ `
+  mutation CreatePetShop($input: CreatePetShopInput!) {
+    createPetShop(input: $input) { id nomeExibicao cnpj cidade estado email ativo configJson { slug } createdAt }
+  }
+`
 const CREATE_OWNER = /* GraphQL */ `
   mutation CreatePetShopOwner($input: CreatePetShopOwnerInput!) {
     createPetShopOwner(input: $input) { id nome email roles }
   }
 `
-
-const DEACTIVATE = /* GraphQL */ `
-  mutation DeactivatePetShop($id: ID!) { deactivatePetShop(id: $id) }
-`
+const DEACTIVATE = /* GraphQL */ `mutation DeactivatePetShop($id: ID!) { deactivatePetShop(id: $id) }`
 
 type PetShop = {
-  id: string
-  nomeExibicao: string
-  cnpj: string
-  cidade: string
-  estado: string
-  email: string
-  ativo: boolean
-  configJson: { slug?: string | null }
-  createdAt: string
+  id: string; nomeExibicao: string; cnpj: string; cidade: string; estado: string
+  email: string; ativo: boolean; configJson: { slug?: string | null }; createdAt: string
 }
+
+const petShopSchema = z.object({
+  nomeExibicao: z.string().min(1, 'Nome é obrigatório'),
+  razaoSocial: z.string().min(1, 'Razão social é obrigatória'),
+  cnpj: z.string().min(14, 'CNPJ inválido'),
+  endereco: z.string().min(1, 'Endereço é obrigatório'),
+  cidade: z.string().min(1, 'Cidade é obrigatória'),
+  estado: z.string().length(2, 'Use a sigla do estado (ex: SP)'),
+  telefone: z.string().optional(),
+  email: z.string().email('E-mail inválido'),
+})
+const ownerSchema = z.object({
+  nome: z.string().min(1, 'Nome é obrigatório'),
+  cpf: z.string().min(11, 'CPF inválido'),
+  email: z.string().email('E-mail inválido'),
+  telefone: z.string().optional(),
+  senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+})
+type PetShopForm = z.infer<typeof petShopSchema>
+type OwnerForm = z.infer<typeof ownerSchema>
 
 type Step = 'petshop' | 'owner' | null
 
 export function PetShopsPage() {
   const qc = useQueryClient()
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['petshops'] })
-
   const { data, isLoading, error } = useQuery({
     queryKey: ['petshops'],
     queryFn: () => gqlClient.request<{ listPetShops: PetShop[] }>(LIST_PETSHOPS, { filter: {} }),
@@ -59,71 +64,44 @@ export function PetShopsPage() {
   })
   const createOwnerMutation = useMutation({
     mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(CREATE_OWNER, vars),
-    onSuccess: invalidate,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['petshops'] }); setSucesso(`Pet shop criado com sucesso! Owner: ${ownerForm.getValues('email')}`) },
   })
   const deactivateMutation = useMutation({
     mutationFn: (id: string) => gqlClient.request(DEACTIVATE, { id }),
-    onSuccess: invalidate,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['petshops'] }),
   })
 
   const [step, setStep] = useState<Step>(null)
   const [newPetShopId, setNewPetShopId] = useState('')
-  const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
 
-  const [psNome, setPsNome] = useState('')
-  const [psRazao, setPsRazao] = useState('')
-  const [psCnpj, setPsCnpj] = useState('')
-  const [psEndereco, setPsEndereco] = useState('')
-  const [psCidade, setPsCidade] = useState('')
-  const [psEstado, setPsEstado] = useState('')
-  const [psTel, setPsTel] = useState('')
-  const [psEmail, setPsEmail] = useState('')
+  const psForm = useForm<PetShopForm>({ resolver: zodResolver(petShopSchema) })
+  const ownerForm = useForm<OwnerForm>({ resolver: zodResolver(ownerSchema) })
 
-  const [ownerNome, setOwnerNome] = useState('')
-  const [ownerCpf, setOwnerCpf] = useState('')
-  const [ownerEmail, setOwnerEmail] = useState('')
-  const [ownerTel, setOwnerTel] = useState('')
-  const [ownerSenha, setOwnerSenha] = useState('')
+  const resetAll = () => { setStep(null); setNewPetShopId(''); psForm.reset(); ownerForm.reset() }
 
-  const resetAll = () => {
-    setStep(null); setNewPetShopId(''); setErro('')
-    setPsNome(''); setPsRazao(''); setPsCnpj(''); setPsEndereco(''); setPsCidade(''); setPsEstado(''); setPsTel(''); setPsEmail('')
-    setOwnerNome(''); setOwnerCpf(''); setOwnerEmail(''); setOwnerTel(''); setOwnerSenha('')
-  }
-
-  const handleCreatePetShop = async (e: React.FormEvent) => {
-    e.preventDefault(); setErro('')
+  const onSubmitPetShop = psForm.handleSubmit(async (data) => {
     try {
       const result = await createPetShopMutation.mutateAsync({
-        input: {
-          nomeExibicao: psNome.trim(), razaoSocial: psRazao.trim(), cnpj: psCnpj.trim(),
-          endereco: psEndereco.trim(), cidade: psCidade.trim(), estado: psEstado.trim().toUpperCase(),
-          telefone: psTel.trim() || undefined, email: psEmail.trim(),
-        },
+        input: { ...data, estado: data.estado.toUpperCase(), telefone: data.telefone || undefined },
       })
       setNewPetShopId(result.createPetShop.id)
       setStep('owner')
     } catch (err: unknown) {
-      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar pet shop')
+      psForm.setError('root', { message: (err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar pet shop' })
     }
-  }
+  })
 
-  const handleCreateOwner = async (e: React.FormEvent) => {
-    e.preventDefault(); setErro('')
+  const onSubmitOwner = ownerForm.handleSubmit(async (data) => {
     try {
       await createOwnerMutation.mutateAsync({
-        input: {
-          petshopId: newPetShopId, nome: ownerNome.trim(), cpf: ownerCpf.trim(),
-          email: ownerEmail.trim(), telefone: ownerTel.trim() || undefined, senha: ownerSenha,
-        },
+        input: { petshopId: newPetShopId, ...data, telefone: data.telefone || undefined },
       })
-      setSucesso(`Pet shop criado com sucesso! Owner: ${ownerEmail}`)
       resetAll()
     } catch (err: unknown) {
-      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar owner')
+      ownerForm.setError('root', { message: (err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar owner' })
     }
-  }
+  })
 
   const handleDeactivate = async (ps: PetShop) => {
     if (!confirm(`Desativar "${ps.nomeExibicao}"?`)) return
@@ -138,11 +116,12 @@ export function PetShopsPage() {
     { key: 'status', header: 'Status', width: 90, render: (ps) => <span style={{ color: ps.ativo ? 'green' : '#999' }}>{ps.ativo ? 'Ativo' : 'Inativo'}</span> },
     {
       key: 'acoes', header: 'Ações', width: 120,
-      render: (ps) => ps.ativo ? (
-        <button onClick={() => handleDeactivate(ps)} style={{ ...btnSmall, color: '#c00' }}>Desativar</button>
-      ) : null,
+      render: (ps) => ps.ativo ? <button onClick={() => handleDeactivate(ps)} style={{ ...btnSmall, color: '#c00' }}>Desativar</button> : null,
     },
   ]
+
+  const f = psForm.formState.errors
+  const o = ownerForm.formState.errors
 
   return (
     <>
@@ -154,18 +133,18 @@ export function PetShopsPage() {
       {sucesso && <p style={{ color: 'green', background: '#f0fff0', padding: '8px 12px', borderRadius: 4, marginBottom: 16 }}>{sucesso}</p>}
 
       {step === 'petshop' && (
-        <FormCard title="Novo Pet Shop (1/2)" onSubmit={handleCreatePetShop}>
+        <FormCard title="Novo Pet Shop (1/2)" onSubmit={onSubmitPetShop}>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <div><label style={labelStyle}>Nome de exibição *</label><input value={psNome} onChange={(e) => setPsNome(e.target.value)} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>Razão social *</label><input value={psRazao} onChange={(e) => setPsRazao(e.target.value)} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>CNPJ *</label><input value={psCnpj} onChange={(e) => setPsCnpj(e.target.value)} required placeholder="00.000.000/0000-00" style={inputStyle} /></div>
-            <div><label style={labelStyle}>Endereço *</label><input value={psEndereco} onChange={(e) => setPsEndereco(e.target.value)} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>Cidade *</label><input value={psCidade} onChange={(e) => setPsCidade(e.target.value)} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>Estado (UF) *</label><input value={psEstado} onChange={(e) => setPsEstado(e.target.value)} required maxLength={2} placeholder="SP" style={{ ...inputStyle, width: 80 }} /></div>
-            <div><label style={labelStyle}>Telefone</label><input value={psTel} onChange={(e) => setPsTel(e.target.value)} style={inputStyle} /></div>
-            <div><label style={labelStyle}>E-mail *</label><input type="email" value={psEmail} onChange={(e) => setPsEmail(e.target.value)} required style={inputStyle} /></div>
+            <div><label style={labelStyle}>Nome de exibição *</label><input {...psForm.register('nomeExibicao')} style={inputStyle} />{f.nomeExibicao && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{f.nomeExibicao.message}</p>}</div>
+            <div><label style={labelStyle}>Razão social *</label><input {...psForm.register('razaoSocial')} style={inputStyle} />{f.razaoSocial && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{f.razaoSocial.message}</p>}</div>
+            <div><label style={labelStyle}>CNPJ *</label><input {...psForm.register('cnpj')} placeholder="00.000.000/0000-00" style={inputStyle} />{f.cnpj && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{f.cnpj.message}</p>}</div>
+            <div><label style={labelStyle}>Endereço *</label><input {...psForm.register('endereco')} style={inputStyle} />{f.endereco && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{f.endereco.message}</p>}</div>
+            <div><label style={labelStyle}>Cidade *</label><input {...psForm.register('cidade')} style={inputStyle} />{f.cidade && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{f.cidade.message}</p>}</div>
+            <div><label style={labelStyle}>Estado (UF) *</label><input {...psForm.register('estado')} maxLength={2} placeholder="SP" style={{ ...inputStyle, width: 80 }} />{f.estado && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{f.estado.message}</p>}</div>
+            <div><label style={labelStyle}>Telefone</label><input {...psForm.register('telefone')} style={inputStyle} /></div>
+            <div><label style={labelStyle}>E-mail *</label><input type="email" {...psForm.register('email')} style={inputStyle} />{f.email && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{f.email.message}</p>}</div>
           </div>
-          {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}
+          {f.root && <p style={{ color: 'red', margin: '8px 0 0' }}>{f.root.message}</p>}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             <button type="submit" style={btnPrimary}>Próximo: Criar Owner</button>
             <button type="button" onClick={resetAll} style={btnSecondary}>Cancelar</button>
@@ -174,16 +153,16 @@ export function PetShopsPage() {
       )}
 
       {step === 'owner' && (
-        <FormCard title="Criar Owner (2/2)" onSubmit={handleCreateOwner}>
+        <FormCard title="Criar Owner (2/2)" onSubmit={onSubmitOwner}>
           <p style={{ margin: '0 0 12px', fontSize: 13, color: '#555' }}>Pet shop criado. Agora crie o owner responsável pela loja.</p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <div><label style={labelStyle}>Nome *</label><input value={ownerNome} onChange={(e) => setOwnerNome(e.target.value)} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>CPF *</label><input value={ownerCpf} onChange={(e) => setOwnerCpf(e.target.value)} required placeholder="000.000.000-00" style={inputStyle} /></div>
-            <div><label style={labelStyle}>E-mail *</label><input type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>Telefone</label><input value={ownerTel} onChange={(e) => setOwnerTel(e.target.value)} style={inputStyle} /></div>
-            <div><label style={labelStyle}>Senha *</label><input type="password" value={ownerSenha} onChange={(e) => setOwnerSenha(e.target.value)} required minLength={6} style={inputStyle} /></div>
+            <div><label style={labelStyle}>Nome *</label><input {...ownerForm.register('nome')} style={inputStyle} />{o.nome && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{o.nome.message}</p>}</div>
+            <div><label style={labelStyle}>CPF *</label><input {...ownerForm.register('cpf')} placeholder="000.000.000-00" style={inputStyle} />{o.cpf && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{o.cpf.message}</p>}</div>
+            <div><label style={labelStyle}>E-mail *</label><input type="email" {...ownerForm.register('email')} style={inputStyle} />{o.email && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{o.email.message}</p>}</div>
+            <div><label style={labelStyle}>Telefone</label><input {...ownerForm.register('telefone')} style={inputStyle} /></div>
+            <div><label style={labelStyle}>Senha *</label><input type="password" {...ownerForm.register('senha')} style={inputStyle} />{o.senha && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{o.senha.message}</p>}</div>
           </div>
-          {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}
+          {o.root && <p style={{ color: 'red', margin: '8px 0 0' }}>{o.root.message}</p>}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
             <button type="submit" style={btnPrimary}>Criar Owner e Finalizar</button>
             <button type="button" onClick={resetAll} style={btnSecondary}>Cancelar</button>
@@ -191,15 +170,7 @@ export function PetShopsPage() {
         </FormCard>
       )}
 
-      <DataTable
-        columns={columns}
-        data={data?.listPetShops ?? []}
-        rowKey={(ps) => ps.id}
-        loading={isLoading}
-        error={error ? String(error) : undefined}
-        rowStyle={(ps) => ({ opacity: ps.ativo ? 1 : 0.5 })}
-        emptyText="Nenhum pet shop cadastrado. Clique em + Novo Pet Shop para começar."
-      />
+      <DataTable columns={columns} data={data?.listPetShops ?? []} rowKey={(ps) => ps.id} loading={isLoading} error={error ? String(error) : undefined} rowStyle={(ps) => ({ opacity: ps.ativo ? 1 : 0.5 })} emptyText="Nenhum pet shop cadastrado. Clique em + Novo Pet Shop para começar." />
     </>
   )
 }
