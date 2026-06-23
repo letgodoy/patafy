@@ -13,6 +13,7 @@
   "dependencies": {
     "@ark-ui/react": "^5.0.0",
     "@patafy/shared-types": "workspace:*",
+    "@patafy/ui": "workspace:*",
     "firebase": "^11.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

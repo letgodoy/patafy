@@ -87,6 +87,9 @@ importers:
       '@patafy/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@patafy/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@urql/core':
         specifier: ^6.0.0
         version: 6.0.2(graphql@16.14.2)
@@ -130,6 +133,9 @@ importers:
       '@patafy/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@patafy/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@urql/core':
         specifier: ^6.0.0
         version: 6.0.2(graphql@16.14.2)
@@ -173,6 +179,9 @@ importers:
       '@patafy/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@patafy/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@urql/core':
         specifier: ^6.0.0
         version: 6.0.2(graphql@16.14.2)
@@ -238,6 +247,24 @@ importers:
         version: 4.22.4
 
   packages/shared-types: {}
+
+  packages/ui:
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.17)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.7(react@19.2.7)
+      react-router:
+        specifier: ^8.0.0
+        version: 8.0.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
 
 packages:
 

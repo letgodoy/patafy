@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useMutation, Provider } from 'urql'
-import { Layout } from '../components/Layout.js'
 import { graphqlClient } from '../lib/graphql-client.js'
+import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, inputStyle, labelStyle } from '@patafy/ui'
+import type { Column } from '@patafy/ui'
 
 const ADMINS_QUERY = /* GraphQL */ `
   query ListSystemAdmins {
     listSystemAdmins { id email nome ativo createdAt }
   }
 `
-
 const CREATE_ADMIN = /* GraphQL */ `
   mutation CreateSystemAdmin($input: CreateSystemAdminInput!) {
     createSystemAdmin(input: $input) { id email nome ativo createdAt }
@@ -41,18 +41,24 @@ function AdminsPageInner() {
     resetForm()
   }
 
-  return (
-    <Layout>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ margin: 0 }}>Administradores do Sistema</h1>
-        <button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnStyle}>+ Novo Admin</button>
-      </div>
+  const columns: Column<AdminUser>[] = [
+    { key: 'nome', header: 'Nome', render: (a) => a.nome },
+    { key: 'email', header: 'E-mail', render: (a) => a.email },
+    { key: 'status', header: 'Status', width: 90, render: (a) => <span style={{ color: a.ativo ? 'green' : '#999' }}>{a.ativo ? 'Ativo' : 'Inativo'}</span> },
+    { key: 'criado', header: 'Criado em', width: 130, render: (a) => new Date(a.createdAt).toLocaleDateString('pt-BR') },
+  ]
 
-      {sucesso && <p style={{ color: 'green', background: '#f0fff0', padding: '8px 12px', borderRadius: 4 }}>{sucesso}</p>}
+  return (
+    <>
+      <PageHeader
+        title="Administradores do Sistema"
+        action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Novo Admin</button>}
+      />
+
+      {sucesso && <p style={{ color: 'green', background: '#f0fff0', padding: '8px 12px', borderRadius: 4, marginBottom: 16 }}>{sucesso}</p>}
 
       {mostrarForm && (
-        <form onSubmit={handleSubmit} style={formStyle}>
-          <h3 style={{ marginTop: 0 }}>Novo Administrador</h3>
+        <FormCard title="Novo Administrador" onSubmit={handleSubmit}>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <div>
               <label style={labelStyle}>Nome *</label>
@@ -69,50 +75,24 @@ function AdminsPageInner() {
           </div>
           {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button type="submit" style={btnStyle}>Criar Administrador</button>
-            <button type="button" onClick={resetForm} style={btnSecStyle}>Cancelar</button>
+            <button type="submit" style={btnPrimary}>Criar Administrador</button>
+            <button type="button" onClick={resetForm} style={btnSecondary}>Cancelar</button>
           </div>
-        </form>
+        </FormCard>
       )}
 
-      {fetching && <p>Carregando...</p>}
-      {error && <p style={{ color: 'red' }}>{error.message}</p>}
-
-      {data && (
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Nome</th>
-              <th style={thStyle}>E-mail</th>
-              <th style={thStyle}>Status</th>
-              <th style={thStyle}>Criado em</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data.listSystemAdmins as AdminUser[]).map((a) => (
-              <tr key={a.id} style={{ opacity: a.ativo ? 1 : 0.5 }}>
-                <td style={tdStyle}>{a.nome}</td>
-                <td style={tdStyle}>{a.email}</td>
-                <td style={tdStyle}><span style={{ color: a.ativo ? 'green' : '#999' }}>{a.ativo ? 'Ativo' : 'Inativo'}</span></td>
-                <td style={tdStyle}>{new Date(a.createdAt).toLocaleDateString('pt-BR')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </Layout>
+      <DataTable
+        columns={columns}
+        data={(data?.listSystemAdmins as AdminUser[] | undefined) ?? []}
+        rowKey={(a) => a.id}
+        loading={fetching}
+        error={error?.message}
+        rowStyle={(a) => ({ opacity: a.ativo ? 1 : 0.5 })}
+      />
+    </>
   )
 }
 
 export function AdminsPage() {
   return <Provider value={graphqlClient}><AdminsPageInner /></Provider>
 }
-
-const btnStyle: React.CSSProperties = { background: '#1a1a2e', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }
-const btnSecStyle: React.CSSProperties = { background: '#fff', color: '#333', border: '1px solid #ccc', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }
-const inputStyle: React.CSSProperties = { display: 'block', padding: '6px 10px', border: '1px solid #ccc', borderRadius: 4, fontSize: 14, width: 220 }
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, marginBottom: 4, color: '#555' }
-const formStyle: React.CSSProperties = { background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8, padding: 20, marginBottom: 24 }
-const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8, overflow: 'hidden' }
-const thStyle: React.CSSProperties = { textAlign: 'left', padding: '10px 16px', background: '#f0f0f0', fontSize: 13, fontWeight: 600 }
-const tdStyle: React.CSSProperties = { padding: '10px 16px', borderTop: '1px solid #eee', fontSize: 14 }
