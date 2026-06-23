@@ -150,14 +150,21 @@ Campos em `config_json` (validação Zod):
 
 ## Critérios de aceite
 
-- [ ] Admin cria pet shop + owner com CPF
-- [ ] Owner configura horário de funcionamento (ADM-06)
-- [ ] Owner define slug único
-- [ ] Tutor lista lojas ativas com filtros cidade/estado/nome
-- [ ] Tutor acede loja via `/loja/:slug`
-- [ ] Owner cadastra banhistas (ADM-07 base)
-- [ ] `config_json` validado contra Zod/TypeScript
-- [ ] Campos lat/lng existem no schema mas não são obrigatórios
+- [x] Admin cria pet shop + owner com CPF
+- [ ] Owner configura horário de funcionamento (ADM-06) — UI básica implementada; grade semanal planejada para E06
+- [x] Owner define slug único
+- [x] Tutor lista lojas ativas com filtros cidade/estado/nome
+- [x] Tutor acede loja via `/loja/:slug`
+- [x] Owner cadastra banhistas (ADM-07 base)
+- [ ] `config_json` validado contra Zod/TypeScript — validação de slug implementada; schema Zod completo em andamento
+- [x] Campos lat/lng existem no schema mas não são obrigatórios
+
+## Design System (entregue neste épico)
+
+- [x] `packages/ui` criado com `DataTable<T>`, `AdminLayout`, `PageHeader`, `FormCard`, tokens de design
+- [x] Layout HOC via nested routes — cada app usa `AppLayout` que renderiza `<Outlet />`
+- [x] Todas as páginas do web-admin (E02) migradas para `DataTable` e `FormCard`
+- [x] `tsconfig.base.json` atualizado com path `@patafy/ui`
 
 ## Histórias sugeridas
 
