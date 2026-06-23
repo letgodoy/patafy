@@ -22,7 +22,7 @@ CRUD universal de **TipoAnimal**, **Raca**, **Porte** e **Pelagem** — catálog
 2. Qualquer utilizador autenticado pode **ler** itens ativos (cadastro de pet, config de loja).
 3. `Raca.tipo_animal_id` é **obrigatório** — raça sempre vinculada a um tipo.
 4. Inativação via `ativo = false` (soft); itens inativos **não** aparecem em selects de novos registros.
-5. Campo `ordem` opcional para ordenação na UI.
+5. Campo `ordem` existe no modelo de dados mas **não é exposto no formulário** — reservado para ordenação futura via drag-and-drop ou ferramenta interna. Exibido apenas na listagem como referência.
 6. Cache de leitura na API com TTL curto (~60s) — invalidar em mutations (RNF02).
 
 ## API GraphQL (módulo `catalogo-global`)

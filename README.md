@@ -25,155 +25,131 @@ docs/
 
 ## Pré-requisitos
 
-- [Node.js](https://nodejs.org) v18+
+- [Node.js](https://nodejs.org) v20+ (v26 recomendado — usa `--env-file` nativo)
 - [pnpm](https://pnpm.io) v8+
-- [Docker](https://www.docker.com) (para o PostgreSQL em dev)
-
-### Instalar pnpm
+- PostgreSQL 15 — via Docker **ou** Homebrew (macOS)
 
 ```bash
 npm install -g pnpm
 ```
 
+---
+
 ## Configuração inicial
 
-### 1. Clonar o repositório
+### 1. Clonar e instalar dependências
 
 ```bash
 git clone https://github.com/letgodoy/patafy.git
 cd patafy
-```
-
-### 2. Instalar dependências
-
-```bash
 pnpm install
 ```
 
-### 3. Configurar variáveis de ambiente
+### 2. Banco de dados
+
+**Opção A — Docker**
+```bash
+docker compose -f infra/docker-compose.yml up postgres -d
+```
+
+**Opção B — Homebrew (macOS, sem Docker)**
+```bash
+brew install postgresql@15
+brew services start postgresql@15
+psql postgres -c "CREATE USER patafy WITH PASSWORD 'patafy' CREATEDB;"
+psql postgres -c "CREATE DATABASE patafy OWNER patafy;"
+```
+
+### 3. Variáveis de ambiente
 
 ```bash
 cp .env.example .env
 ```
 
-Edite o `.env` e preencha ao menos:
+Preencha o `.env` com as credenciais do projeto:
 
-| Variável | Descrição |
+| Variável | Onde encontrar |
 |---|---|
-| `DATABASE_URL` | String de conexão PostgreSQL (já preenchida para dev local) |
-| `FIREBASE_PROJECT_ID` | ID do projeto no Firebase Console |
-| `RESEND_API_KEY` | Chave da API do Resend (usado no E09 — notificações) |
+| `FIREBASE_PROJECT_ID` | Firebase Console → Configurações do projeto → Geral |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Console → Configurações → Contas de serviço → Gerar nova chave privada (cole o JSON em uma linha) |
+| `VITE_FIREBASE_*` | Firebase Console → Configurações → Geral → Seus apps → SDK config |
+| `DATABASE_URL` | Já preenchida para dev local (`postgresql://patafy:patafy@localhost:5432/patafy`) |
 
-> As demais variáveis já têm valores padrão para desenvolvimento local.
+### 4. Migrations e seed
+
+```bash
+# Aplicar migrations
+pnpm --filter @patafy/db run migrate
+
+# Popular catálogo global (raças, portes, pelagens)
+pnpm --filter @patafy/db run seed
+```
+
+### 5. Primeiro admin do sistema
+
+Na primeira vez, crie o usuário admin via script (rode uma única vez):
+
+```bash
+# Edite o email/senha desejados dentro do arquivo antes de rodar
+node --env-file=.env apps/api/node_modules/.bin/tsx apps/api/scripts/bootstrap-admin.ts
+```
+
+> O script está em `apps/api/scripts/bootstrap-admin.ts` e é ignorado pelo git.
 
 ---
 
 ## Rodando em desenvolvimento
 
-### Opção A — Docker Compose (recomendado)
-
-Sobe o banco, a API e o worker de uma vez:
+Em terminais separados:
 
 ```bash
-# subir tudo
-docker compose -f infra/docker-compose.yml up -d
-
-# ver logs
-docker compose -f infra/docker-compose.yml logs -f api
-```
-
-Depois rode as migrations:
-
-```bash
-pnpm --filter @patafy/db run migrate
-```
-
-### Opção B — Processos separados
-
-**1. Banco de dados (PostgreSQL)**
-
-```bash
-docker compose -f infra/docker-compose.yml up postgres -d
-```
-
-**2. Migrations do Prisma**
-
-```bash
-pnpm --filter @patafy/db run migrate
-```
-
-**3. API** (em um terminal)
-
-```bash
+# API (porta 3000)
 pnpm --filter @patafy/api run dev
+
+# Frontend admin (porta 5175)
+pnpm --filter @patafy/web-admin run dev
+
+# Frontend tutor (porta 5173)
+pnpm --filter @patafy/web-tutor run dev
+
+# Frontend pet shop (porta 5174)
+pnpm --filter @patafy/web-petshop run dev
 ```
 
-**4. Worker** (em outro terminal)
+### Verificando se está funcionando
 
 ```bash
-pnpm --filter @patafy/worker run dev
-```
-
-**5. Frontends** (cada um em um terminal separado)
-
-```bash
-pnpm --filter @patafy/web-tutor run dev      # http://localhost:5173
-pnpm --filter @patafy/web-petshop run dev    # http://localhost:5174
-pnpm --filter @patafy/web-admin run dev      # http://localhost:5175
-```
-
----
-
-## Verificando se está funcionando
-
-```bash
-# API health check
 curl http://localhost:3000/health/live    # → {"status":"ok"}
 curl http://localhost:3000/health/ready  # → {"status":"ok"} (requer BD conectado)
-
-# GraphQL playground
-open http://localhost:3000/graphql
 ```
+
+GraphQL Playground: http://localhost:3000/graphql
 
 ---
 
 ## Comandos úteis
 
 ```bash
-# Instalar dependências de todos os pacotes
-pnpm install
-
-# Rodar lint em todos os projetos
-pnpm lint
-
-# Rodar typecheck em todos os projetos
+# Typecheck em todos os projetos
 pnpm typecheck
 
-# Gerar Prisma Client (após mudanças no schema)
-pnpm db:generate
-
-# Criar nova migration
-pnpm db:migrate
-
-# Abrir Prisma Studio (interface visual do banco)
-pnpm db:studio
+# Lint em todos os projetos
+pnpm lint
 
 # Build de todos os projetos
 pnpm build
-```
 
----
+# Gerar Prisma Client (após mudanças no schema)
+pnpm --filter @patafy/db run generate
 
-## Banco de dados
+# Criar nova migration
+pnpm --filter @patafy/db run migrate
 
-O schema Prisma fica em `packages/db/prisma/schema.prisma` e contém todas as entidades do modelo de domínio. Após qualquer alteração no schema:
+# Popular catálogo com dados iniciais
+pnpm --filter @patafy/db run seed
 
-```bash
-# Gerar uma nova migration e aplicar
-pnpm db:migrate
-
-# Regenerar o Prisma Client
-pnpm db:generate
+# Abrir Prisma Studio (interface visual do banco)
+pnpm --filter @patafy/db run studio
 ```
 
 ---
@@ -185,7 +161,7 @@ pnpm db:generate
 | Monorepo | Nx + pnpm workspaces |
 | API | Fastify + GraphQL Yoga + Prisma |
 | Banco | PostgreSQL 15 |
-| Frontends | React 18 + Vite + Park UI |
+| Frontends | React 19 + Vite + urql |
 | Autenticação | Firebase Authentication |
 | E-mail | Resend |
 | Linguagem | TypeScript (strict) |
