@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useQuery, useMutation, Provider } from 'urql'
-import { graphqlClient } from '../lib/graphql-client.js'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { gqlClient } from '../lib/graphql-client.js'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
 
@@ -34,18 +34,34 @@ type StaffMember = { id: string; nome: string; email: string; roles: string[]; a
 
 const ROLE_LABELS: Record<string, string> = { owner: 'Owner', atendente: 'Atendente', banhista: 'Banhista' }
 
-function EquipePageInner() {
-  const [{ data: psData }] = useQuery({ query: MY_PETSHOP_ID })
-  const petshopId = (psData?.myPetShop as { id: string } | null)?.id ?? ''
+export function EquipePage() {
+  const qc = useQueryClient()
 
-  const [{ data, fetching, error }, reexecute] = useQuery({
-    query: LIST_STAFF,
-    variables: { petshopId },
-    pause: !petshopId,
+  const { data: psData } = useQuery({
+    queryKey: ['myPetshopId'],
+    queryFn: () => gqlClient.request<{ myPetShop: { id: string } | null }>(MY_PETSHOP_ID),
   })
-  const [, createStaff] = useMutation(CREATE_STAFF)
-  const [, updateStaff] = useMutation(UPDATE_STAFF)
-  const [, deactivateStaff] = useMutation(DEACTIVATE_STAFF)
+  const petshopId = psData?.myPetShop?.id ?? ''
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['staff', petshopId],
+    queryFn: () => gqlClient.request<{ listStaff: StaffMember[] }>(LIST_STAFF, { petshopId }),
+    enabled: !!petshopId,
+  })
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['staff', petshopId] })
+
+  const createStaffMutation = useMutation({
+    mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(CREATE_STAFF, vars),
+    onSuccess: invalidate,
+  })
+  const updateStaffMutation = useMutation({
+    mutationFn: (vars: { id: string; input: Record<string, unknown> }) => gqlClient.request(UPDATE_STAFF, vars),
+    onSuccess: invalidate,
+  })
+  const deactivateStaffMutation = useMutation({
+    mutationFn: (id: string) => gqlClient.request(DEACTIVATE_STAFF, { id }),
+    onSuccess: invalidate,
+  })
 
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editando, setEditando] = useState<StaffMember | null>(null)
@@ -59,13 +75,14 @@ function EquipePageInner() {
   const [erro, setErro] = useState('')
 
   const resetForm = () => {
-    setMostrarForm(false); setEditando(null);
-    setNome(''); setCpf(''); setEmail(''); setTelefone(''); setSenha(''); setRolesAtendente(false); setRolesBanhista(false); setErro('')
+    setMostrarForm(false); setEditando(null)
+    setNome(''); setCpf(''); setEmail(''); setTelefone(''); setSenha('')
+    setRolesAtendente(false); setRolesBanhista(false); setErro('')
   }
 
   const abrirEdicao = (m: StaffMember) => {
-    setEditando(m); setNome(m.nome);
-    setRolesAtendente(m.roles.includes('atendente')); setRolesBanhista(m.roles.includes('banhista'));
+    setEditando(m); setNome(m.nome)
+    setRolesAtendente(m.roles.includes('atendente')); setRolesBanhista(m.roles.includes('banhista'))
     setMostrarForm(true)
   }
 
@@ -79,24 +96,23 @@ function EquipePageInner() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setErro('')
     if (!editando && buildRoles().length === 0) { setErro('Selecione pelo menos um papel'); return }
-
-    if (editando) {
-      const result = await updateStaff({ id: editando.id, input: { nome: nome.trim(), roles: buildRoles() } })
-      if (result.error) { setErro(result.error.graphQLErrors[0]?.message ?? 'Erro ao atualizar'); return }
-    } else {
-      const result = await createStaff({
-        input: { petshopId, nome: nome.trim(), cpf: cpf.trim(), email: email.trim(), telefone: telefone.trim() || undefined, senha, roles: buildRoles() },
-      })
-      if (result.error) { setErro(result.error.graphQLErrors[0]?.message ?? 'Erro ao criar'); return }
+    try {
+      if (editando) {
+        await updateStaffMutation.mutateAsync({ id: editando.id, input: { nome: nome.trim(), roles: buildRoles() } })
+      } else {
+        await createStaffMutation.mutateAsync({
+          input: { petshopId, nome: nome.trim(), cpf: cpf.trim(), email: email.trim(), telefone: telefone.trim() || undefined, senha, roles: buildRoles() },
+        })
+      }
+      resetForm()
+    } catch (err: unknown) {
+      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao salvar')
     }
-    reexecute({ requestPolicy: 'network-only' })
-    resetForm()
   }
 
   const handleDeactivate = async (m: StaffMember) => {
     if (!confirm(`Desativar "${m.nome}"?`)) return
-    await deactivateStaff({ id: m.id })
-    reexecute({ requestPolicy: 'network-only' })
+    await deactivateStaffMutation.mutateAsync(m.id)
   }
 
   const columns: Column<StaffMember>[] = [
@@ -153,17 +169,13 @@ function EquipePageInner() {
 
       <DataTable
         columns={columns}
-        data={(data?.listStaff as StaffMember[] | undefined) ?? []}
+        data={data?.listStaff ?? []}
         rowKey={(m) => m.id}
-        loading={fetching || !petshopId}
-        error={error?.message}
+        loading={isLoading || !petshopId}
+        error={error ? String(error) : undefined}
         rowStyle={(m) => ({ opacity: m.ativo ? 1 : 0.5 })}
         emptyText="Nenhum membro de equipe cadastrado."
       />
     </>
   )
-}
-
-export function EquipePage() {
-  return <Provider value={graphqlClient}><EquipePageInner /></Provider>
 }

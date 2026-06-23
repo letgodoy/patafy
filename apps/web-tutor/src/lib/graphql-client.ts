@@ -1,15 +1,8 @@
-import { createClient, cacheExchange, fetchExchange } from '@urql/core'
+import { createGqlClient } from '@patafy/graphql-client'
 
-let authToken: string | null = null
+const { client, setAuthToken } = createGqlClient(
+  import.meta.env['VITE_API_URL'] ?? 'http://localhost:3000/graphql',
+)
 
-export function setAuthToken(token: string | null) {
-  authToken = token
-}
-
-export const graphqlClient = createClient({
-  url: import.meta.env['VITE_API_URL'] ?? 'http://localhost:3000/graphql',
-  exchanges: [cacheExchange, fetchExchange],
-  fetchOptions: (): RequestInit => ({
-    headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
-  }),
-})
+export { setAuthToken }
+export const gqlClient = client

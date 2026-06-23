@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useQuery, useMutation, Provider } from 'urql'
-import { graphqlClient } from '../../lib/graphql-client.js'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { gqlClient } from '../../lib/graphql-client.js'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
 
@@ -46,11 +46,25 @@ type PetShop = {
 
 type Step = 'petshop' | 'owner' | null
 
-function PetShopsPageInner() {
-  const [{ data, fetching, error }, reexecute] = useQuery({ query: LIST_PETSHOPS, variables: { filter: {} } })
-  const [, createPetShop] = useMutation(CREATE_PETSHOP)
-  const [, createOwner] = useMutation(CREATE_OWNER)
-  const [, deactivate] = useMutation(DEACTIVATE)
+export function PetShopsPage() {
+  const qc = useQueryClient()
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['petshops'] })
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['petshops'],
+    queryFn: () => gqlClient.request<{ listPetShops: PetShop[] }>(LIST_PETSHOPS, { filter: {} }),
+  })
+  const createPetShopMutation = useMutation({
+    mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request<{ createPetShop: PetShop }>(CREATE_PETSHOP, vars),
+  })
+  const createOwnerMutation = useMutation({
+    mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(CREATE_OWNER, vars),
+    onSuccess: invalidate,
+  })
+  const deactivateMutation = useMutation({
+    mutationFn: (id: string) => gqlClient.request(DEACTIVATE, { id }),
+    onSuccess: invalidate,
+  })
 
   const [step, setStep] = useState<Step>(null)
   const [newPetShopId, setNewPetShopId] = useState('')
@@ -73,52 +87,47 @@ function PetShopsPageInner() {
   const [ownerSenha, setOwnerSenha] = useState('')
 
   const resetAll = () => {
-    setStep(null); setNewPetShopId(''); setErro('');
-    setPsNome(''); setPsRazao(''); setPsCnpj(''); setPsEndereco(''); setPsCidade(''); setPsEstado(''); setPsTel(''); setPsEmail('');
-    setOwnerNome(''); setOwnerCpf(''); setOwnerEmail(''); setOwnerTel(''); setOwnerSenha('');
+    setStep(null); setNewPetShopId(''); setErro('')
+    setPsNome(''); setPsRazao(''); setPsCnpj(''); setPsEndereco(''); setPsCidade(''); setPsEstado(''); setPsTel(''); setPsEmail('')
+    setOwnerNome(''); setOwnerCpf(''); setOwnerEmail(''); setOwnerTel(''); setOwnerSenha('')
   }
 
   const handleCreatePetShop = async (e: React.FormEvent) => {
     e.preventDefault(); setErro('')
-    const result = await createPetShop({
-      input: {
-        nomeExibicao: psNome.trim(),
-        razaoSocial: psRazao.trim(),
-        cnpj: psCnpj.trim(),
-        endereco: psEndereco.trim(),
-        cidade: psCidade.trim(),
-        estado: psEstado.trim().toUpperCase(),
-        telefone: psTel.trim() || undefined,
-        email: psEmail.trim(),
-      },
-    })
-    if (result.error) { setErro(result.error.graphQLErrors[0]?.message ?? 'Erro ao criar pet shop'); return }
-    setNewPetShopId(result.data.createPetShop.id)
-    setStep('owner')
+    try {
+      const result = await createPetShopMutation.mutateAsync({
+        input: {
+          nomeExibicao: psNome.trim(), razaoSocial: psRazao.trim(), cnpj: psCnpj.trim(),
+          endereco: psEndereco.trim(), cidade: psCidade.trim(), estado: psEstado.trim().toUpperCase(),
+          telefone: psTel.trim() || undefined, email: psEmail.trim(),
+        },
+      })
+      setNewPetShopId(result.createPetShop.id)
+      setStep('owner')
+    } catch (err: unknown) {
+      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar pet shop')
+    }
   }
 
   const handleCreateOwner = async (e: React.FormEvent) => {
     e.preventDefault(); setErro('')
-    const result = await createOwner({
-      input: {
-        petshopId: newPetShopId,
-        nome: ownerNome.trim(),
-        cpf: ownerCpf.trim(),
-        email: ownerEmail.trim(),
-        telefone: ownerTel.trim() || undefined,
-        senha: ownerSenha,
-      },
-    })
-    if (result.error) { setErro(result.error.graphQLErrors[0]?.message ?? 'Erro ao criar owner'); return }
-    setSucesso(`Pet shop criado com sucesso! Owner: ${ownerEmail}`)
-    reexecute({ requestPolicy: 'network-only' })
-    resetAll()
+    try {
+      await createOwnerMutation.mutateAsync({
+        input: {
+          petshopId: newPetShopId, nome: ownerNome.trim(), cpf: ownerCpf.trim(),
+          email: ownerEmail.trim(), telefone: ownerTel.trim() || undefined, senha: ownerSenha,
+        },
+      })
+      setSucesso(`Pet shop criado com sucesso! Owner: ${ownerEmail}`)
+      resetAll()
+    } catch (err: unknown) {
+      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar owner')
+    }
   }
 
   const handleDeactivate = async (ps: PetShop) => {
     if (!confirm(`Desativar "${ps.nomeExibicao}"?`)) return
-    await deactivate({ id: ps.id })
-    reexecute({ requestPolicy: 'network-only' })
+    await deactivateMutation.mutateAsync(ps.id)
   }
 
   const columns: Column<PetShop>[] = [
@@ -184,17 +193,13 @@ function PetShopsPageInner() {
 
       <DataTable
         columns={columns}
-        data={(data?.listPetShops as PetShop[] | undefined) ?? []}
+        data={data?.listPetShops ?? []}
         rowKey={(ps) => ps.id}
-        loading={fetching}
-        error={error?.message}
+        loading={isLoading}
+        error={error ? String(error) : undefined}
         rowStyle={(ps) => ({ opacity: ps.ativo ? 1 : 0.5 })}
         emptyText="Nenhum pet shop cadastrado. Clique em + Novo Pet Shop para começar."
       />
     </>
   )
-}
-
-export function PetShopsPage() {
-  return <Provider value={graphqlClient}><PetShopsPageInner /></Provider>
 }

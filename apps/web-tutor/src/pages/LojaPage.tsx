@@ -1,6 +1,6 @@
 import { useParams } from 'react-router'
-import { useQuery, Provider } from 'urql'
-import { graphqlClient } from '../lib/graphql-client.js'
+import { useQuery } from '@tanstack/react-query'
+import { gqlClient } from '../lib/graphql-client.js'
 import { colors } from '@patafy/ui'
 
 const PETSHOP_BY_SLUG = /* GraphQL */ `
@@ -31,14 +31,19 @@ type PetShop = {
   }
 }
 
-function LojaPageInner() {
+export function LojaPage() {
   const { slug } = useParams<{ slug: string }>()
-  const [{ data, fetching, error }] = useQuery({ query: PETSHOP_BY_SLUG, variables: { slug: slug ?? '' }, pause: !slug })
 
-  if (fetching) return <div style={{ padding: 24 }}>Carregando...</div>
-  if (error) return <div style={{ padding: 24, color: 'red' }}>{error.message}</div>
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['loja', slug],
+    queryFn: () => gqlClient.request<{ petShopBySlug: PetShop | null }>(PETSHOP_BY_SLUG, { slug: slug ?? '' }),
+    enabled: !!slug,
+  })
 
-  const loja = data?.petShopBySlug as PetShop | null
+  if (isLoading) return <div style={{ padding: 24 }}>Carregando...</div>
+  if (error) return <div style={{ padding: 24, color: 'red' }}>{String(error)}</div>
+
+  const loja = data?.petShopBySlug
   if (!loja) return <div style={{ padding: 24 }}><h2>Loja não encontrada</h2><p>O endereço <strong>{slug}</strong> não existe ou foi desativado.</p></div>
 
   const corPrimaria = loja.configJson?.corPrincipal ?? colors.primary
@@ -94,8 +99,4 @@ function LojaPageInner() {
       </div>
     </div>
   )
-}
-
-export function LojaPage() {
-  return <Provider value={graphqlClient}><LojaPageInner /></Provider>
 }

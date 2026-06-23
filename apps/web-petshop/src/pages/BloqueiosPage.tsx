@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useQuery, useMutation, Provider } from 'urql'
-import { graphqlClient } from '../lib/graphql-client.js'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { gqlClient } from '../lib/graphql-client.js'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
 
@@ -37,14 +37,35 @@ function fmt(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-function BloqueiosPageInner() {
-  const [{ data: psData }] = useQuery({ query: MY_PETSHOP_ID })
-  const petshopId = (psData?.myPetShop as { id: string } | null)?.id ?? ''
+export function BloqueiosPage() {
+  const qc = useQueryClient()
 
-  const [{ data, fetching, error }, reexecute] = useQuery({ query: LIST_BLOQUEIOS, variables: { petshopId }, pause: !petshopId })
-  const [{ data: staffData }] = useQuery({ query: LIST_STAFF, variables: { petshopId }, pause: !petshopId })
-  const [, createBloqueio] = useMutation(CREATE_BLOQUEIO)
-  const [, deleteBloqueio] = useMutation(DELETE_BLOQUEIO)
+  const { data: psData } = useQuery({
+    queryKey: ['myPetshopId'],
+    queryFn: () => gqlClient.request<{ myPetShop: { id: string } | null }>(MY_PETSHOP_ID),
+  })
+  const petshopId = psData?.myPetShop?.id ?? ''
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['bloqueios', petshopId],
+    queryFn: () => gqlClient.request<{ listBloqueios: Bloqueio[] }>(LIST_BLOQUEIOS, { petshopId }),
+    enabled: !!petshopId,
+  })
+  const { data: staffData } = useQuery({
+    queryKey: ['staffBanhistas', petshopId],
+    queryFn: () => gqlClient.request<{ listStaff: StaffMember[] }>(LIST_STAFF, { petshopId }),
+    enabled: !!petshopId,
+  })
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['bloqueios', petshopId] })
+
+  const createBloqueioMutation = useMutation({
+    mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(CREATE_BLOQUEIO, vars),
+    onSuccess: invalidate,
+  })
+  const deleteBloqueioMutation = useMutation({
+    mutationFn: (id: string) => gqlClient.request(DELETE_BLOQUEIO, { id }),
+    onSuccess: invalidate,
+  })
 
   const [mostrarForm, setMostrarForm] = useState(false)
   const [banhistaId, setBanhistaId] = useState('')
@@ -53,30 +74,31 @@ function BloqueiosPageInner() {
   const [motivo, setMotivo] = useState('')
   const [erro, setErro] = useState('')
 
-  const banhistas = ((staffData?.listStaff as StaffMember[] | undefined) ?? []).filter((m) => m.ativo && m.roles.includes('banhista'))
+  const banhistas = (staffData?.listStaff ?? []).filter((m) => m.ativo && m.roles.includes('banhista'))
 
   const resetForm = () => { setMostrarForm(false); setBanhistaId(''); setDataInicio(''); setDataFim(''); setMotivo(''); setErro('') }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setErro('')
-    const result = await createBloqueio({
-      input: {
-        petshopId,
-        banhistaId: banhistaId || undefined,
-        dataInicio: new Date(dataInicio).toISOString(),
-        dataFim: new Date(dataFim).toISOString(),
-        motivo: motivo.trim() || undefined,
-      },
-    })
-    if (result.error) { setErro(result.error.graphQLErrors[0]?.message ?? 'Erro ao criar bloqueio'); return }
-    reexecute({ requestPolicy: 'network-only' })
-    resetForm()
+    try {
+      await createBloqueioMutation.mutateAsync({
+        input: {
+          petshopId,
+          banhistaId: banhistaId || undefined,
+          dataInicio: new Date(dataInicio).toISOString(),
+          dataFim: new Date(dataFim).toISOString(),
+          motivo: motivo.trim() || undefined,
+        },
+      })
+      resetForm()
+    } catch (err: unknown) {
+      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar bloqueio')
+    }
   }
 
   const handleDelete = async (b: Bloqueio) => {
     if (!confirm('Remover este bloqueio?')) return
-    await deleteBloqueio({ id: b.id })
-    reexecute({ requestPolicy: 'network-only' })
+    await deleteBloqueioMutation.mutateAsync(b.id)
   }
 
   const banhistaNome = (id: string | null) => {
@@ -123,16 +145,12 @@ function BloqueiosPageInner() {
 
       <DataTable
         columns={columns}
-        data={(data?.listBloqueios as Bloqueio[] | undefined) ?? []}
+        data={data?.listBloqueios ?? []}
         rowKey={(b) => b.id}
-        loading={fetching || !petshopId}
-        error={error?.message}
+        loading={isLoading || !petshopId}
+        error={error ? String(error) : undefined}
         emptyText="Nenhum bloqueio de agenda cadastrado."
       />
     </>
   )
-}
-
-export function BloqueiosPage() {
-  return <Provider value={graphqlClient}><BloqueiosPageInner /></Provider>
 }

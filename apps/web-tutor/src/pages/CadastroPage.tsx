@@ -1,15 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
+import { useMutation } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext.js'
-import { graphqlClient } from '../lib/graphql-client.js'
+import { gqlClient } from '../lib/graphql-client.js'
 
 const REGISTER_TUTOR = /* GraphQL */ `
   mutation RegisterTutor($input: RegisterTutorInput!) {
-    registerTutor(input: $input) {
-      id
-      nome
-      email
-    }
+    registerTutor(input: $input) { id nome email }
   }
 `
 
@@ -29,6 +26,10 @@ export function CadastroPage() {
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const registerMutation = useMutation({
+    mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(REGISTER_TUTOR, vars),
+  })
+
   const set = (campo: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const valor = campo === 'cpf' ? formatarCPF(e.target.value) : e.target.value
     setForm((f) => ({ ...f, [campo]: valor }))
@@ -37,36 +38,22 @@ export function CadastroPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
-
-    if (form.senha !== form.confirmarSenha) {
-      setErro('As senhas não coincidem.')
-      return
-    }
-    if (form.senha.length < 6) {
-      setErro('A senha deve ter pelo menos 6 caracteres.')
-      return
-    }
+    if (form.senha !== form.confirmarSenha) { setErro('As senhas não coincidem.'); return }
+    if (form.senha.length < 6) { setErro('A senha deve ter pelo menos 6 caracteres.'); return }
 
     setLoading(true)
     try {
       await signUp(form.email, form.senha)
-
-      const result = await graphqlClient.mutation(REGISTER_TUTOR, {
+      await registerMutation.mutateAsync({
         input: { nome: form.nome, email: form.email, cpf: form.cpf, telefone: form.telefone || undefined, endereco: form.endereco || undefined },
-      }).toPromise()
-
-      if (result.error) {
-        const code = result.error.graphQLErrors[0]?.extensions?.['code']
-        if (code === 'CPF_DUPLICATE') setErro('CPF já cadastrado.')
-        else if (code === 'EMAIL_DUPLICATE') setErro('E-mail já cadastrado.')
-        else if (code === 'CPF_INVALID') setErro('CPF inválido.')
-        else setErro('Erro ao criar conta. Tente novamente.')
-        return
-      }
-
+      })
       navigate('/dashboard')
-    } catch {
-      setErro('Erro ao criar conta. Verifique os dados e tente novamente.')
+    } catch (err: unknown) {
+      const code = (err as { response?: { errors?: { extensions?: { code?: string }; message: string }[] } })?.response?.errors?.[0]?.extensions?.code
+      if (code === 'CPF_DUPLICATE') setErro('CPF já cadastrado.')
+      else if (code === 'EMAIL_DUPLICATE') setErro('E-mail já cadastrado.')
+      else if (code === 'CPF_INVALID') setErro('CPF inválido.')
+      else setErro('Erro ao criar conta. Verifique os dados e tente novamente.')
     } finally {
       setLoading(false)
     }

@@ -1,0 +1,142 @@
+fragment PetShopFields on PetShop {
+  id
+  nomeExibicao
+  razaoSocial
+  cnpj
+  endereco
+  cidade
+  estado
+  telefone
+  email
+  ativo
+  createdAt
+  updatedAt
+  configJson {
+    slug
+    nome
+    logo
+    corPrincipal
+    animaisAtendidos
+    tamanhosAceitos
+    aceitaPetsAgressivos
+    intervaloBanhoMinutos
+    prazoCancelamentoHoras
+    prazoRemarcacaoHoras
+    politicaCancelamento
+    toleranciaAtrasoMinutos
+    cancelamentoAutomaticoAposAtraso
+  }
+}
+
+fragment StaffFields on StaffMember {
+  id
+  userId
+  petshopId
+  nome
+  email
+  roles
+  ativo
+  createdAt
+}
+
+query ListPetShops($filter: ListPetShopsFilter) {
+  listPetShops(filter: $filter) {
+    ...PetShopFields
+  }
+}
+
+query PetShopById($id: ID!) {
+  petShopById(id: $id) {
+    ...PetShopFields
+  }
+}
+
+query PetShopBySlug($slug: String!) {
+  petShopBySlug(slug: $slug) {
+    ...PetShopFields
+  }
+}
+
+query MyPetShop {
+  myPetShop {
+    ...PetShopFields
+  }
+}
+
+query ListStaff($petshopId: ID!) {
+  listStaff(petshopId: $petshopId) {
+    ...StaffFields
+  }
+}
+
+query ListBloqueios($petshopId: ID!) {
+  listBloqueios(petshopId: $petshopId) {
+    id
+    petshopId
+    banhistaId
+    dataInicio
+    dataFim
+    motivo
+    createdAt
+  }
+}
+
+mutation CreatePetShop($input: CreatePetShopInput!) {
+  createPetShop(input: $input) {
+    ...PetShopFields
+  }
+}
+
+mutation UpdatePetShop($id: ID!, $input: UpdatePetShopInput!) {
+  updatePetShop(id: $id, input: $input) {
+    ...PetShopFields
+  }
+}
+
+mutation UpdatePetShopConfig($id: ID!, $config: UpdatePetShopConfigInput!) {
+  updatePetShopConfig(id: $id, config: $config) {
+    ...PetShopFields
+  }
+}
+
+mutation DeactivatePetShop($id: ID!) {
+  deactivatePetShop(id: $id)
+}
+
+mutation CreatePetShopOwner($input: CreatePetShopOwnerInput!) {
+  createPetShopOwner(input: $input) {
+    ...StaffFields
+  }
+}
+
+mutation CreateStaff($input: CreateStaffInput!) {
+  createStaff(input: $input) {
+    ...StaffFields
+  }
+}
+
+mutation UpdateStaff($id: ID!, $input: UpdateStaffInput!) {
+  updateStaff(id: $id, input: $input) {
+    ...StaffFields
+  }
+}
+
+mutation DeactivateStaff($id: ID!) {
+  deactivateStaff(id: $id)
+}
+
+mutation CreateBloqueio($input: CreateBloqueioInput!) {
+  createBloqueio(input: $input) {
+    id
+    petshopId
+    banhistaId
+    dataInicio
+    dataFim
+    motivo
+    createdAt
+  }
+}
+
+mutation DeleteBloqueio($id: ID!) {
+  deleteBloqueio(id: $id)
+}

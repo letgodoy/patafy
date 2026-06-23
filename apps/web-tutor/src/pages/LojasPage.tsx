@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useQuery, Provider } from 'urql'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { graphqlClient } from '../lib/graphql-client.js'
+import { gqlClient } from '../lib/graphql-client.js'
 import { PageHeader, inputStyle, labelStyle, colors } from '@patafy/ui'
 
 const LIST_PETSHOPS = /* GraphQL */ `
@@ -24,23 +24,22 @@ type PetShop = {
   configJson: { slug?: string | null; corPrincipal?: string | null; nome?: string | null }
 }
 
-function LojasPageInner() {
+export function LojasPage() {
   const [cidade, setCidade] = useState('')
   const [estado, setEstado] = useState('')
   const [nome, setNome] = useState('')
-
   const [filtroAtivo, setFiltroAtivo] = useState({ cidade: '', estado: '', nome: '' })
 
-  const [{ data, fetching, error }] = useQuery({
-    query: LIST_PETSHOPS,
-    variables: {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['petshops', filtroAtivo],
+    queryFn: () => gqlClient.request<{ listPetShops: PetShop[] }>(LIST_PETSHOPS, {
       filter: {
         ativo: true,
         cidade: filtroAtivo.cidade || undefined,
         estado: filtroAtivo.estado || undefined,
         nome: filtroAtivo.nome || undefined,
       },
-    },
+    }),
   })
 
   const handleFiltrar = (e: React.FormEvent) => {
@@ -48,7 +47,7 @@ function LojasPageInner() {
     setFiltroAtivo({ cidade: cidade.trim(), estado: estado.trim(), nome: nome.trim() })
   }
 
-  const lojas = (data?.listPetShops as PetShop[] | undefined) ?? []
+  const lojas = data?.listPetShops ?? []
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
@@ -74,10 +73,10 @@ function LojasPageInner() {
         </div>
       </form>
 
-      {fetching && <p>Buscando lojas...</p>}
-      {error && <p style={{ color: 'red' }}>{error.message}</p>}
+      {isLoading && <p>Buscando lojas...</p>}
+      {error && <p style={{ color: 'red' }}>{String(error)}</p>}
 
-      {!fetching && !error && lojas.length === 0 && (
+      {!isLoading && !error && lojas.length === 0 && (
         <p style={{ color: '#666', textAlign: 'center', padding: 32 }}>Nenhuma loja encontrada com os filtros aplicados.</p>
       )}
 
@@ -104,8 +103,4 @@ function LojasPageInner() {
       </div>
     </div>
   )
-}
-
-export function LojasPage() {
-  return <Provider value={graphqlClient}><LojasPageInner /></Provider>
 }

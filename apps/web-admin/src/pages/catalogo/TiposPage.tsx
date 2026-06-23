@@ -1,13 +1,19 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from 'urql'
-import { Provider } from 'urql'
-import { graphqlClient } from '../../lib/graphql-client.js'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { gqlClient } from '../../lib/graphql-client.js'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
+import type {
+  TiposAnimalQuery, TiposAnimalQueryVariables,
+  CreateTipoAnimalMutation, CreateTipoAnimalMutationVariables,
+  UpdateTipoAnimalMutation, UpdateTipoAnimalMutationVariables,
+  SetCatalogItemAtivoMutation, SetCatalogItemAtivoMutationVariables,
+  TipoAnimal,
+} from '@patafy/graphql-client'
 
 const TIPOS_QUERY = /* GraphQL */ `
-  query TiposAnimal {
-    tiposAnimal { id nome ativo ordem createdAt }
+  query TiposAnimal($ativo: Boolean) {
+    tiposAnimal(ativo: $ativo) { id nome ativo ordem createdAt }
   }
 `
 const CREATE_TIPO = /* GraphQL */ `
@@ -21,52 +27,64 @@ const UPDATE_TIPO = /* GraphQL */ `
   }
 `
 const SET_ATIVO = /* GraphQL */ `
-  mutation SetAtivo($tipo: String!, $id: ID!, $ativo: Boolean!) {
+  mutation SetCatalogItemAtivo($tipo: String!, $id: ID!, $ativo: Boolean!) {
     setCatalogItemAtivo(tipo: $tipo, id: $id, ativo: $ativo)
   }
 `
 
-type TipoAnimal = { id: string; nome: string; ativo: boolean; ordem: number | null }
+type TipoRow = Pick<TipoAnimal, 'id' | 'nome' | 'ativo' | 'ordem'>
 
-function TiposPageInner() {
-  const [{ data, fetching, error }, reexecute] = useQuery({ query: TIPOS_QUERY })
-  const [, createTipo] = useMutation(CREATE_TIPO)
-  const [, updateTipo] = useMutation(UPDATE_TIPO)
-  const [, setAtivo] = useMutation(SET_ATIVO)
+export function TiposPage() {
+  const qc = useQueryClient()
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['tiposAnimal'],
+    queryFn: () => gqlClient.request<TiposAnimalQuery>(TIPOS_QUERY),
+  })
 
-  const [editando, setEditando] = useState<TipoAnimal | null>(null)
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['tiposAnimal'] })
+
+  const createMutation = useMutation({
+    mutationFn: (vars: CreateTipoAnimalMutationVariables) =>
+      gqlClient.request<CreateTipoAnimalMutation>(CREATE_TIPO, vars),
+    onSuccess: invalidate,
+  })
+  const updateMutation = useMutation({
+    mutationFn: (vars: UpdateTipoAnimalMutationVariables) =>
+      gqlClient.request<UpdateTipoAnimalMutation>(UPDATE_TIPO, vars),
+    onSuccess: invalidate,
+  })
+  const setAtivoMutation = useMutation({
+    mutationFn: (vars: SetCatalogItemAtivoMutationVariables) =>
+      gqlClient.request<SetCatalogItemAtivoMutation>(SET_ATIVO, vars),
+    onSuccess: invalidate,
+  })
+
+  const [editando, setEditando] = useState<TipoRow | null>(null)
   const [nome, setNome] = useState('')
   const [erro, setErro] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
 
   const resetForm = () => { setNome(''); setErro(''); setEditando(null); setMostrarForm(false) }
-
-  const abrirEdicao = (t: TipoAnimal) => { setEditando(t); setNome(t.nome); setMostrarForm(true) }
+  const abrirEdicao = (t: TipoRow) => { setEditando(t); setNome(t.nome); setMostrarForm(true) }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErro('')
-    const input = { nome: nome.trim() }
-    const result = editando
-      ? await updateTipo({ id: editando.id, input })
-      : await createTipo({ input })
-    if (result.error) { setErro(result.error.graphQLErrors[0]?.message ?? 'Erro ao salvar'); return }
-    reexecute({ requestPolicy: 'network-only' })
-    resetForm()
+    e.preventDefault(); setErro('')
+    try {
+      if (editando) await updateMutation.mutateAsync({ id: editando.id, input: { nome: nome.trim() } })
+      else await createMutation.mutateAsync({ input: { nome: nome.trim() } })
+      resetForm()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message
+      setErro(msg ?? 'Erro ao salvar')
+    }
   }
 
-  const handleToggleAtivo = async (t: TipoAnimal) => {
-    await setAtivo({ tipo: 'tipoAnimal', id: t.id, ativo: !t.ativo })
-    reexecute({ requestPolicy: 'network-only' })
-  }
+  const handleToggleAtivo = (t: TipoRow) => setAtivoMutation.mutate({ tipo: 'tipoAnimal', id: t.id, ativo: !t.ativo })
 
-  const columns: Column<TipoAnimal>[] = [
+  const columns: Column<TipoRow>[] = [
     { key: 'nome', header: 'Nome', render: (t) => t.nome },
     { key: 'ordem', header: 'Ordem', width: 80, render: (t) => t.ordem ?? '—' },
-    {
-      key: 'status', header: 'Status', width: 90,
-      render: (t) => <span style={{ color: t.ativo ? 'green' : '#999' }}>{t.ativo ? 'Ativo' : 'Inativo'}</span>,
-    },
+    { key: 'status', header: 'Status', width: 90, render: (t) => <span style={{ color: t.ativo ? 'green' : '#999' }}>{t.ativo ? 'Ativo' : 'Inativo'}</span> },
     {
       key: 'acoes', header: 'Ações', width: 160,
       render: (t) => (
@@ -82,10 +100,7 @@ function TiposPageInner() {
 
   return (
     <>
-      <PageHeader
-        title="Tipos de Animal"
-        action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Novo Tipo</button>}
-      />
+      <PageHeader title="Tipos de Animal" action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Novo Tipo</button>} />
 
       {mostrarForm && (
         <FormCard title={editando ? 'Editar Tipo' : 'Novo Tipo de Animal'} onSubmit={handleSubmit}>
@@ -105,16 +120,12 @@ function TiposPageInner() {
 
       <DataTable
         columns={columns}
-        data={(data?.tiposAnimal as TipoAnimal[] | undefined) ?? []}
+        data={(data?.tiposAnimal as TipoRow[] | undefined) ?? []}
         rowKey={(t) => t.id}
-        loading={fetching}
-        error={error?.message}
+        loading={isLoading}
+        error={error ? String(error) : undefined}
         rowStyle={(t) => ({ opacity: t.ativo ? 1 : 0.5 })}
       />
     </>
   )
-}
-
-export function TiposPage() {
-  return <Provider value={graphqlClient}><TiposPageInner /></Provider>
 }

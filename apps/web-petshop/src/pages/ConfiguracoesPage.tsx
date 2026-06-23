@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation, Provider } from 'urql'
-import { graphqlClient } from '../lib/graphql-client.js'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { gqlClient } from '../lib/graphql-client.js'
 import { PageHeader, FormCard, btnPrimary, inputStyle, labelStyle } from '@patafy/ui'
 
 const MY_PETSHOP = /* GraphQL */ `
@@ -59,12 +59,21 @@ type PetShop = {
   configJson: PetShopConfig
 }
 
-function ConfiguracoesPageInner() {
-  const [{ data, fetching, error }, reexecute] = useQuery({ query: MY_PETSHOP })
-  const [, updateConfig] = useMutation(UPDATE_CONFIG)
-  const [, updatePetShop] = useMutation(UPDATE_PETSHOP)
+export function ConfiguracoesPage() {
+  const qc = useQueryClient()
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['myPetshop'],
+    queryFn: () => gqlClient.request<{ myPetShop: PetShop | null }>(MY_PETSHOP),
+  })
+  const updateConfigMutation = useMutation({
+    mutationFn: (vars: { id: string; config: Record<string, unknown> }) => gqlClient.request(UPDATE_CONFIG, vars),
+  })
+  const updatePetShopMutation = useMutation({
+    mutationFn: (vars: { id: string; input: Record<string, unknown> }) => gqlClient.request(UPDATE_PETSHOP, vars),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['myPetshop'] }),
+  })
 
-  const ps = data?.myPetShop as PetShop | null | undefined
+  const ps = data?.myPetShop
 
   const [slug, setSlug] = useState('')
   const [nomeExibicao, setNomeExibicao] = useState('')
@@ -97,31 +106,30 @@ function ConfiguracoesPageInner() {
     setErro(''); setSucesso('')
     if (!ps) return
 
-    const configResult = await updateConfig({
-      id: ps.id,
-      config: {
-        slug: slug.trim() || undefined,
-        politicaCancelamento: politica.trim() || undefined,
-        prazoCancelamentoHoras: prazoCancelamento ? Number(prazoCancelamento) : undefined,
-        prazoRemarcacaoHoras: prazoRemarcacao ? Number(prazoRemarcacao) : undefined,
-        toleranciaAtrasoMinutos: toleranciaAtraso ? Number(toleranciaAtraso) : undefined,
-        intervaloBanhoMinutos: intervaloBanho ? Number(intervaloBanho) : undefined,
-      },
-    })
-    if (configResult.error) { setErro(configResult.error.graphQLErrors[0]?.message ?? 'Erro ao salvar configurações'); return }
-
-    const psResult = await updatePetShop({
-      id: ps.id,
-      input: { nomeExibicao: nomeExibicao.trim(), telefone: telefone.trim() || undefined, email: email.trim() },
-    })
-    if (psResult.error) { setErro(psResult.error.graphQLErrors[0]?.message ?? 'Erro ao atualizar dados'); return }
-
-    setSucesso('Configurações salvas com sucesso!')
-    reexecute({ requestPolicy: 'network-only' })
+    try {
+      await updateConfigMutation.mutateAsync({
+        id: ps.id,
+        config: {
+          slug: slug.trim() || undefined,
+          politicaCancelamento: politica.trim() || undefined,
+          prazoCancelamentoHoras: prazoCancelamento ? Number(prazoCancelamento) : undefined,
+          prazoRemarcacaoHoras: prazoRemarcacao ? Number(prazoRemarcacao) : undefined,
+          toleranciaAtrasoMinutos: toleranciaAtraso ? Number(toleranciaAtraso) : undefined,
+          intervaloBanhoMinutos: intervaloBanho ? Number(intervaloBanho) : undefined,
+        },
+      })
+      await updatePetShopMutation.mutateAsync({
+        id: ps.id,
+        input: { nomeExibicao: nomeExibicao.trim(), telefone: telefone.trim() || undefined, email: email.trim() },
+      })
+      setSucesso('Configurações salvas com sucesso!')
+    } catch (err: unknown) {
+      setErro((err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao salvar')
+    }
   }
 
-  if (fetching) return <p>Carregando...</p>
-  if (error) return <p style={{ color: 'red' }}>{error.message}</p>
+  if (isLoading) return <p>Carregando...</p>
+  if (error) return <p style={{ color: 'red' }}>{String(error)}</p>
   if (!ps) return <p style={{ color: '#999' }}>Nenhum pet shop associado a esta conta.</p>
 
   return (
@@ -135,7 +143,11 @@ function ConfiguracoesPageInner() {
         <FormCard title="Dados da Loja">
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <div><label style={labelStyle}>Nome de exibição *</label><input value={nomeExibicao} onChange={(e) => setNomeExibicao(e.target.value)} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>Slug da URL pública</label><input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} placeholder="meu-pet-shop" style={inputStyle} /><small style={{ color: '#999', fontSize: 12 }}>ex: patafy.com/loja/{slug || 'meu-pet-shop'}</small></div>
+            <div>
+              <label style={labelStyle}>Slug da URL pública</label>
+              <input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} placeholder="meu-pet-shop" style={inputStyle} />
+              <small style={{ color: '#999', fontSize: 12 }}>ex: patafy.com/loja/{slug || 'meu-pet-shop'}</small>
+            </div>
             <div><label style={labelStyle}>Telefone</label><input value={telefone} onChange={(e) => setTelefone(e.target.value)} style={inputStyle} /></div>
             <div><label style={labelStyle}>E-mail *</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} /></div>
           </div>
@@ -160,8 +172,4 @@ function ConfiguracoesPageInner() {
       </form>
     </>
   )
-}
-
-export function ConfiguracoesPage() {
-  return <Provider value={graphqlClient}><ConfiguracoesPageInner /></Provider>
 }
