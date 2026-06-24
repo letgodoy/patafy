@@ -1,20 +1,15 @@
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { gqlClient } from '../lib/graphql-client.js'
+import { useQueryClient } from '@tanstack/react-query'
+import { useMyPetShopIdQuery, useListBloqueiosQuery, useListStaffQuery, useCreateBloqueioMutation, useDeleteBloqueioMutation } from '@patafy/graphql-client'
+import type { BloqueioAgenda, StaffMember } from '@patafy/graphql-client'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
 
-const MY_PETSHOP_ID = /* GraphQL */ `query MyPetShopId { myPetShop { id } }`
-const LIST_BLOQUEIOS = /* GraphQL */ `query ListBloqueios($petshopId: ID!) { listBloqueios(petshopId: $petshopId) { id petshopId banhistaId dataInicio dataFim motivo createdAt } }`
-const LIST_STAFF = /* GraphQL */ `query ListStaffBanhistas($petshopId: ID!) { listStaff(petshopId: $petshopId) { id nome roles ativo } }`
-const CREATE_BLOQUEIO = /* GraphQL */ `mutation CreateBloqueio($input: CreateBloqueioInput!) { createBloqueio(input: $input) { id petshopId banhistaId dataInicio dataFim motivo createdAt } }`
-const DELETE_BLOQUEIO = /* GraphQL */ `mutation DeleteBloqueio($id: ID!) { deleteBloqueio(id: $id) }`
-
-type Bloqueio = { id: string; banhistaId: string | null; dataInicio: string; dataFim: string; motivo: string | null; createdAt: string }
-type StaffMember = { id: string; nome: string; roles: string[]; ativo: boolean }
+type BloqueioRow = Pick<BloqueioAgenda, 'id' | 'banhistaId' | 'dataInicio' | 'dataFim' | 'motivo' | 'createdAt'>
+type StaffRow = Pick<StaffMember, 'id' | 'nome' | 'roles' | 'ativo'>
 
 const schema = z.object({
   banhistaId: z.string().optional(),
@@ -30,26 +25,15 @@ function fmt(iso: string) {
 
 export function BloqueiosPage() {
   const qc = useQueryClient()
-
-  const { data: psData } = useQuery({
-    queryKey: ['myPetshopId'],
-    queryFn: () => gqlClient.request<{ myPetShop: { id: string } | null }>(MY_PETSHOP_ID),
-  })
+  const { data: psData } = useMyPetShopIdQuery()
   const petshopId = psData?.myPetShop?.id ?? ''
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['bloqueios', petshopId],
-    queryFn: () => gqlClient.request<{ listBloqueios: Bloqueio[] }>(LIST_BLOQUEIOS, { petshopId }),
-    enabled: !!petshopId,
-  })
-  const { data: staffData } = useQuery({
-    queryKey: ['staffBanhistas', petshopId],
-    queryFn: () => gqlClient.request<{ listStaff: StaffMember[] }>(LIST_STAFF, { petshopId }),
-    enabled: !!petshopId,
-  })
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['bloqueios', petshopId] })
-  const createBloqueioMutation = useMutation({ mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(CREATE_BLOQUEIO, vars), onSuccess: invalidate })
-  const deleteBloqueioMutation = useMutation({ mutationFn: (id: string) => gqlClient.request(DELETE_BLOQUEIO, { id }), onSuccess: invalidate })
+  const { data, isLoading, error } = useListBloqueiosQuery({ petshopId }, { enabled: !!petshopId })
+  const { data: staffData } = useListStaffQuery({ petshopId }, { enabled: !!petshopId })
+  const invalidate = () => qc.invalidateQueries({ queryKey: useListBloqueiosQuery.getKey({ petshopId }) })
+
+  const createBloqueioMutation = useCreateBloqueioMutation({ onSuccess: invalidate })
+  const deleteBloqueioMutation = useDeleteBloqueioMutation({ onSuccess: invalidate })
 
   const [mostrarForm, setMostrarForm] = useState(false)
   const form = useForm<FormData>({
@@ -57,8 +41,7 @@ export function BloqueiosPage() {
     defaultValues: { banhistaId: '', dataInicio: '', dataFim: '', motivo: '' },
   })
 
-  const banhistas = (staffData?.listStaff ?? []).filter((m) => m.ativo && m.roles.includes('banhista'))
-
+  const banhistas = ((staffData?.listStaff ?? []) as StaffRow[]).filter((m) => m.ativo && m.roles.includes('banhista'))
   const resetForm = () => { form.reset(); setMostrarForm(false) }
 
   const onSubmit = form.handleSubmit(async (data) => {
@@ -78,9 +61,9 @@ export function BloqueiosPage() {
     }
   })
 
-  const handleDelete = async (b: Bloqueio) => {
+  const handleDelete = async (b: BloqueioRow) => {
     if (!confirm('Remover este bloqueio?')) return
-    await deleteBloqueioMutation.mutateAsync(b.id)
+    await deleteBloqueioMutation.mutateAsync({ id: b.id })
   }
 
   const banhistaNome = (id: string | null) => {
@@ -88,8 +71,8 @@ export function BloqueiosPage() {
     return banhistas.find((b) => b.id === id)?.nome ?? id
   }
 
-  const columns: Column<Bloqueio>[] = [
-    { key: 'banhista', header: 'Banhista / Escopo', render: (b) => banhistaNome(b.banhistaId) },
+  const columns: Column<BloqueioRow>[] = [
+    { key: 'banhista', header: 'Banhista / Escopo', render: (b) => banhistaNome(b.banhistaId ?? null) },
     { key: 'inicio', header: 'Início', width: 150, render: (b) => fmt(b.dataInicio) },
     { key: 'fim', header: 'Fim', width: 150, render: (b) => fmt(b.dataFim) },
     { key: 'motivo', header: 'Motivo', render: (b) => b.motivo ?? '—' },
@@ -104,7 +87,6 @@ export function BloqueiosPage() {
   return (
     <>
       <PageHeader title="Bloqueios de Agenda" action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Novo Bloqueio</button>} />
-
       {mostrarForm && (
         <FormCard title="Novo Bloqueio" onSubmit={onSubmit}>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -137,8 +119,7 @@ export function BloqueiosPage() {
           </div>
         </FormCard>
       )}
-
-      <DataTable columns={columns} data={data?.listBloqueios ?? []} rowKey={(b) => b.id} loading={isLoading || !petshopId} error={error ? String(error) : undefined} emptyText="Nenhum bloqueio de agenda cadastrado." />
+      <DataTable columns={columns} data={(data?.listBloqueios as BloqueioRow[] | undefined) ?? []} rowKey={(b) => b.id} loading={isLoading || !petshopId} error={error ? String(error) : undefined} emptyText="Nenhum bloqueio de agenda cadastrado." />
     </>
   )
 }

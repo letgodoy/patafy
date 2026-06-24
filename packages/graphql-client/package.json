@@ -11,8 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "graphql-request": "^7.0.0",
-    "graphql": "^16.0.0"
+    "@graphql-codegen/typescript-react-query": "^6.1.2",
+    "@tanstack/react-query": "^5.0.0",
+    "graphql": "^16.0.0",
+    "graphql-request": "^7.0.0"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^5.0.0",

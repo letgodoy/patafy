@@ -2,39 +2,26 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { gqlClient } from '../../lib/graphql-client.js'
+import { useQueryClient } from '@tanstack/react-query'
+import { usePortesQuery, useCreatePorteMutation, useUpdatePorteMutation, useSetCatalogItemAtivoMutation } from '@patafy/graphql-client'
+import type { Porte } from '@patafy/graphql-client'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
-import type {
-  PortesQuery,
-  CreatePorteMutation, CreatePorteMutationVariables,
-  UpdatePorteMutation, UpdatePorteMutationVariables,
-  SetCatalogItemAtivoMutationVariables,
-  Porte,
-} from '@patafy/graphql-client'
-
-const PORTES_QUERY = /* GraphQL */ `query Portes { portes { id nome ativo ordem } }`
-const CREATE_PORTE = /* GraphQL */ `mutation CreatePorte($input: CreatePorteInput!) { createPorte(input: $input) { id nome ativo ordem } }`
-const UPDATE_PORTE = /* GraphQL */ `mutation UpdatePorte($id: ID!, $input: UpdatePorteInput!) { updatePorte(id: $id, input: $input) { id nome ativo ordem } }`
-const SET_ATIVO = /* GraphQL */ `mutation SetCatalogItemAtivo($tipo: String!, $id: ID!, $ativo: Boolean!) { setCatalogItemAtivo(tipo: $tipo, id: $id, ativo: $ativo) }`
 
 const schema = z.object({ nome: z.string().min(1, 'Nome é obrigatório') })
 type FormData = z.infer<typeof schema>
-
 type PorteRow = Pick<Porte, 'id' | 'nome' | 'ativo' | 'ordem'>
 
 export function PortesPage() {
   const qc = useQueryClient()
-  const { data, isLoading, error } = useQuery({ queryKey: ['portes'], queryFn: () => gqlClient.request<PortesQuery>(PORTES_QUERY) })
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['portes'] })
-  const createMutation = useMutation({ mutationFn: (vars: CreatePorteMutationVariables) => gqlClient.request<CreatePorteMutation>(CREATE_PORTE, vars), onSuccess: invalidate })
-  const updateMutation = useMutation({ mutationFn: (vars: UpdatePorteMutationVariables) => gqlClient.request<UpdatePorteMutation>(UPDATE_PORTE, vars), onSuccess: invalidate })
-  const setAtivoMutation = useMutation({ mutationFn: (vars: SetCatalogItemAtivoMutationVariables) => gqlClient.request(SET_ATIVO, vars), onSuccess: invalidate })
+  const { data, isLoading, error } = usePortesQuery()
+  const invalidate = () => qc.invalidateQueries({ queryKey: usePortesQuery.getKey() })
+  const createMutation = useCreatePorteMutation({ onSuccess: invalidate })
+  const updateMutation = useUpdatePorteMutation({ onSuccess: invalidate })
+  const setAtivoMutation = useSetCatalogItemAtivoMutation({ onSuccess: invalidate })
 
   const [editando, setEditando] = useState<PorteRow | null>(null)
   const [mostrarForm, setMostrarForm] = useState(false)
-
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { nome: '' } })
 
   const resetForm = () => { setEditando(null); form.reset(); setMostrarForm(false) }

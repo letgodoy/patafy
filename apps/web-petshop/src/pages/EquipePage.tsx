@@ -2,19 +2,13 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { gqlClient } from '../lib/graphql-client.js'
+import { useQueryClient } from '@tanstack/react-query'
+import { useMyPetShopIdQuery, useListStaffQuery, useCreateStaffMutation, useUpdateStaffMutation, useDeactivateStaffMutation } from '@patafy/graphql-client'
+import type { StaffMember } from '@patafy/graphql-client'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
 
-const MY_PETSHOP_ID = /* GraphQL */ `query MyPetShopId { myPetShop { id } }`
-const LIST_STAFF = /* GraphQL */ `query ListStaff($petshopId: ID!) { listStaff(petshopId: $petshopId) { id nome email roles ativo createdAt } }`
-const CREATE_STAFF = /* GraphQL */ `mutation CreateStaff($input: CreateStaffInput!) { createStaff(input: $input) { id nome email roles ativo createdAt } }`
-const UPDATE_STAFF = /* GraphQL */ `mutation UpdateStaff($id: ID!, $input: UpdateStaffInput!) { updateStaff(id: $id, input: $input) { id nome email roles ativo } }`
-const DEACTIVATE_STAFF = /* GraphQL */ `mutation DeactivateStaff($id: ID!) { deactivateStaff(id: $id) }`
-
-type StaffMember = { id: string; nome: string; email: string; roles: string[]; ativo: boolean; createdAt: string }
-
+type StaffRow = Pick<StaffMember, 'id' | 'nome' | 'email' | 'roles' | 'ativo' | 'createdAt'>
 const ROLE_LABELS: Record<string, string> = { owner: 'Owner', atendente: 'Atendente', banhista: 'Banhista' }
 
 const staffSchema = z.object({
@@ -30,25 +24,17 @@ type FormData = z.infer<typeof staffSchema>
 
 export function EquipePage() {
   const qc = useQueryClient()
-
-  const { data: psData } = useQuery({
-    queryKey: ['myPetshopId'],
-    queryFn: () => gqlClient.request<{ myPetShop: { id: string } | null }>(MY_PETSHOP_ID),
-  })
+  const { data: psData } = useMyPetShopIdQuery()
   const petshopId = psData?.myPetShop?.id ?? ''
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['staff', petshopId],
-    queryFn: () => gqlClient.request<{ listStaff: StaffMember[] }>(LIST_STAFF, { petshopId }),
-    enabled: !!petshopId,
-  })
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['staff', petshopId] })
+  const { data, isLoading, error } = useListStaffQuery({ petshopId }, { enabled: !!petshopId })
+  const invalidate = () => qc.invalidateQueries({ queryKey: useListStaffQuery.getKey({ petshopId }) })
 
-  const createStaffMutation = useMutation({ mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(CREATE_STAFF, vars), onSuccess: invalidate })
-  const updateStaffMutation = useMutation({ mutationFn: (vars: { id: string; input: Record<string, unknown> }) => gqlClient.request(UPDATE_STAFF, vars), onSuccess: invalidate })
-  const deactivateStaffMutation = useMutation({ mutationFn: (id: string) => gqlClient.request(DEACTIVATE_STAFF, { id }), onSuccess: invalidate })
+  const createStaffMutation = useCreateStaffMutation({ onSuccess: invalidate })
+  const updateStaffMutation = useUpdateStaffMutation({ onSuccess: invalidate })
+  const deactivateStaffMutation = useDeactivateStaffMutation({ onSuccess: invalidate })
 
-  const [editando, setEditando] = useState<StaffMember | null>(null)
+  const [editando, setEditando] = useState<StaffRow | null>(null)
   const [mostrarForm, setMostrarForm] = useState(false)
 
   const form = useForm<FormData>({
@@ -57,7 +43,7 @@ export function EquipePage() {
   })
 
   const resetForm = () => { setEditando(null); form.reset(); setMostrarForm(false) }
-  const abrirEdicao = (m: StaffMember) => {
+  const abrirEdicao = (m: StaffRow) => {
     setEditando(m)
     form.reset({ nome: m.nome, rolesAtendente: m.roles.includes('atendente'), rolesBanhista: m.roles.includes('banhista') })
     setMostrarForm(true)
@@ -89,12 +75,12 @@ export function EquipePage() {
     }
   })
 
-  const handleDeactivate = async (m: StaffMember) => {
+  const handleDeactivate = async (m: StaffRow) => {
     if (!confirm(`Desativar "${m.nome}"?`)) return
-    await deactivateStaffMutation.mutateAsync(m.id)
+    await deactivateStaffMutation.mutateAsync({ id: m.id })
   }
 
-  const columns: Column<StaffMember>[] = [
+  const columns: Column<StaffRow>[] = [
     { key: 'nome', header: 'Nome', render: (m) => m.nome },
     { key: 'email', header: 'E-mail', render: (m) => m.email },
     { key: 'roles', header: 'Papéis', render: (m) => m.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ') },
@@ -117,7 +103,6 @@ export function EquipePage() {
   return (
     <>
       <PageHeader title="Equipe" action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Novo Membro</button>} />
-
       {mostrarForm && (
         <FormCard title={editando ? 'Editar Membro' : 'Novo Membro da Equipe'} onSubmit={onSubmit}>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -128,33 +113,17 @@ export function EquipePage() {
             </div>
             {!editando && (
               <>
-                <div>
-                  <label style={labelStyle}>CPF *</label>
-                  <input {...form.register('cpf')} placeholder="000.000.000-00" style={inputStyle} />
-                  {e.cpf && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.cpf.message}</p>}
-                </div>
-                <div>
-                  <label style={labelStyle}>E-mail *</label>
-                  <input type="email" {...form.register('email')} style={inputStyle} />
-                  {e.email && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.email.message}</p>}
-                </div>
+                <div><label style={labelStyle}>CPF *</label><input {...form.register('cpf')} placeholder="000.000.000-00" style={inputStyle} />{e.cpf && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.cpf.message}</p>}</div>
+                <div><label style={labelStyle}>E-mail *</label><input type="email" {...form.register('email')} style={inputStyle} />{e.email && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.email.message}</p>}</div>
                 <div><label style={labelStyle}>Telefone</label><input {...form.register('telefone')} style={inputStyle} /></div>
-                <div>
-                  <label style={labelStyle}>Senha *</label>
-                  <input type="password" {...form.register('senha')} style={inputStyle} />
-                  {e.senha && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.senha.message}</p>}
-                </div>
+                <div><label style={labelStyle}>Senha *</label><input type="password" {...form.register('senha')} style={inputStyle} />{e.senha && <p style={{ color: 'red', fontSize: 13, margin: '4px 0 0' }}>{e.senha.message}</p>}</div>
               </>
             )}
           </div>
           <div style={{ marginTop: 12 }}>
             <label style={labelStyle}>Papéis *</label>
-            <label style={{ marginRight: 16, fontSize: 14 }}>
-              <input type="checkbox" {...form.register('rolesAtendente')} /> Atendente
-            </label>
-            <label style={{ fontSize: 14 }}>
-              <input type="checkbox" {...form.register('rolesBanhista')} /> Banhista
-            </label>
+            <label style={{ marginRight: 16, fontSize: 14 }}><input type="checkbox" {...form.register('rolesAtendente')} /> Atendente</label>
+            <label style={{ fontSize: 14 }}><input type="checkbox" {...form.register('rolesBanhista')} /> Banhista</label>
           </div>
           {e.root && <p style={{ color: 'red', margin: '8px 0 0' }}>{e.root.message}</p>}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
@@ -163,8 +132,7 @@ export function EquipePage() {
           </div>
         </FormCard>
       )}
-
-      <DataTable columns={columns} data={data?.listStaff ?? []} rowKey={(m) => m.id} loading={isLoading || !petshopId} error={error ? String(error) : undefined} rowStyle={(m) => ({ opacity: m.ativo ? 1 : 0.5 })} emptyText="Nenhum membro de equipe cadastrado." />
+      <DataTable columns={columns} data={(data?.listStaff as StaffRow[] | undefined) ?? []} rowKey={(m) => m.id} loading={isLoading || !petshopId} error={error ? String(error) : undefined} rowStyle={(m) => ({ opacity: m.ativo ? 1 : 0.5 })} emptyText="Nenhum membro de equipe cadastrado." />
     </>
   )
 }

@@ -5,15 +5,15 @@ const config: CodegenConfig = {
   documents: ['src/documents/**/*.graphql'],
   generates: {
     'src/generated/graphql.ts': {
-      plugins: ['typescript', 'typescript-operations'],
+      plugins: ['typescript', 'typescript-operations', 'typescript-react-query'],
       config: {
-        scalars: {
-          ID: 'string',
-        },
+        scalars: { ID: 'string' },
         enumsAsTypes: true,
-        avoidOptionals: false,
         skipTypename: true,
-        nonOptionalTypename: false,
+        fetcher: '../fetcher#fetcher',
+        exposeQueryKeys: true,
+        addInfiniteQuery: false,
+        reactQueryVersion: 5,
       },
     },
   },

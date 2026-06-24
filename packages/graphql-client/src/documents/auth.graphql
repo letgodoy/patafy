@@ -35,3 +35,11 @@ mutation SyncUser {
     }
   }
 }
+
+mutation RegisterTutor($input: RegisterTutorInput!) {
+  registerTutor(input: $input) {
+    id
+    nome
+    email
+  }
+}

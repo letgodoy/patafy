@@ -2,15 +2,8 @@ import { useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMutation } from '@tanstack/react-query'
+import { useRegisterTutorMutation } from '@patafy/graphql-client'
 import { useAuth } from '../contexts/AuthContext.js'
-import { gqlClient } from '../lib/graphql-client.js'
-
-const REGISTER_TUTOR = /* GraphQL */ `
-  mutation RegisterTutor($input: RegisterTutorInput!) {
-    registerTutor(input: $input) { id nome email }
-  }
-`
 
 const schema = z.object({
   nome: z.string().min(1, 'Nome completo é obrigatório'),
@@ -36,10 +29,7 @@ function formatarCPF(valor: string) {
 export function CadastroPage() {
   const { signUp } = useAuth()
   const navigate = useNavigate()
-
-  const registerMutation = useMutation({
-    mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(REGISTER_TUTOR, vars),
-  })
+  const registerMutation = useRegisterTutorMutation()
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -75,16 +65,7 @@ export function CadastroPage() {
         </div>
         <div>
           <label htmlFor="cpf">CPF</label>
-          <input
-            id="cpf"
-            type="text"
-            placeholder="000.000.000-00"
-            {...form.register('cpf', {
-              onChange: (ev) => {
-                form.setValue('cpf', formatarCPF(ev.target.value), { shouldValidate: true })
-              },
-            })}
-          />
+          <input id="cpf" type="text" placeholder="000.000.000-00" {...form.register('cpf', { onChange: (ev) => form.setValue('cpf', formatarCPF(ev.target.value), { shouldValidate: true }) })} />
           {e.cpf && <p role="alert">{e.cpf.message}</p>}
         </div>
         <div>

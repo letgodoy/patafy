@@ -2,42 +2,26 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { gqlClient } from '../../lib/graphql-client.js'
+import { useQueryClient } from '@tanstack/react-query'
+import { useTiposAnimalQuery, useCreateTipoAnimalMutation, useUpdateTipoAnimalMutation, useSetCatalogItemAtivoMutation } from '@patafy/graphql-client'
+import type { TipoAnimal } from '@patafy/graphql-client'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
-import type {
-  TiposAnimalQuery,
-  CreateTipoAnimalMutation, CreateTipoAnimalMutationVariables,
-  UpdateTipoAnimalMutation, UpdateTipoAnimalMutationVariables,
-  SetCatalogItemAtivoMutation, SetCatalogItemAtivoMutationVariables,
-  TipoAnimal,
-} from '@patafy/graphql-client'
-
-const TIPOS_QUERY = /* GraphQL */ `query TiposAnimal($ativo: Boolean) { tiposAnimal(ativo: $ativo) { id nome ativo ordem createdAt } }`
-const CREATE_TIPO = /* GraphQL */ `mutation CreateTipoAnimal($input: CreateTipoAnimalInput!) { createTipoAnimal(input: $input) { id nome ativo ordem } }`
-const UPDATE_TIPO = /* GraphQL */ `mutation UpdateTipoAnimal($id: ID!, $input: UpdateTipoAnimalInput!) { updateTipoAnimal(id: $id, input: $input) { id nome ativo ordem } }`
-const SET_ATIVO = /* GraphQL */ `mutation SetCatalogItemAtivo($tipo: String!, $id: ID!, $ativo: Boolean!) { setCatalogItemAtivo(tipo: $tipo, id: $id, ativo: $ativo) }`
 
 const schema = z.object({ nome: z.string().min(1, 'Nome é obrigatório') })
 type FormData = z.infer<typeof schema>
-
 type TipoRow = Pick<TipoAnimal, 'id' | 'nome' | 'ativo' | 'ordem'>
 
 export function TiposPage() {
   const qc = useQueryClient()
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['tiposAnimal'],
-    queryFn: () => gqlClient.request<TiposAnimalQuery>(TIPOS_QUERY),
-  })
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['tiposAnimal'] })
-  const createMutation = useMutation({ mutationFn: (vars: CreateTipoAnimalMutationVariables) => gqlClient.request<CreateTipoAnimalMutation>(CREATE_TIPO, vars), onSuccess: invalidate })
-  const updateMutation = useMutation({ mutationFn: (vars: UpdateTipoAnimalMutationVariables) => gqlClient.request<UpdateTipoAnimalMutation>(UPDATE_TIPO, vars), onSuccess: invalidate })
-  const setAtivoMutation = useMutation({ mutationFn: (vars: SetCatalogItemAtivoMutationVariables) => gqlClient.request<SetCatalogItemAtivoMutation>(SET_ATIVO, vars), onSuccess: invalidate })
+  const { data, isLoading, error } = useTiposAnimalQuery()
+  const invalidate = () => qc.invalidateQueries({ queryKey: useTiposAnimalQuery.getKey() })
+  const createMutation = useCreateTipoAnimalMutation({ onSuccess: invalidate })
+  const updateMutation = useUpdateTipoAnimalMutation({ onSuccess: invalidate })
+  const setAtivoMutation = useSetCatalogItemAtivoMutation({ onSuccess: invalidate })
 
   const [editando, setEditando] = useState<TipoRow | null>(null)
   const [mostrarForm, setMostrarForm] = useState(false)
-
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { nome: '' } })
 
   const resetForm = () => { setEditando(null); form.reset(); setMostrarForm(false) }

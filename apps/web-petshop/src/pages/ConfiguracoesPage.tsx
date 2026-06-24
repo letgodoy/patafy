@@ -1,47 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { gqlClient } from '../lib/graphql-client.js'
+import { useQueryClient } from '@tanstack/react-query'
+import { useMyPetShopQuery, useUpdatePetShopConfigMutation, useUpdatePetShopMutation } from '@patafy/graphql-client'
 import { PageHeader, FormCard, btnPrimary, inputStyle, labelStyle } from '@patafy/ui'
-import { useState } from 'react'
-
-const MY_PETSHOP = /* GraphQL */ `
-  query MyPetShop {
-    myPetShop {
-      id nomeExibicao razaoSocial cnpj endereco cidade estado telefone email
-      configJson {
-        slug nome logo corPrincipal aceitaPetsAgressivos
-        intervaloBanhoMinutos prazoCancelamentoHoras prazoRemarcacaoHoras
-        politicaCancelamento toleranciaAtrasoMinutos cancelamentoAutomaticoAposAtraso
-      }
-    }
-  }
-`
-const UPDATE_CONFIG = /* GraphQL */ `
-  mutation UpdatePetShopConfig($id: ID!, $config: UpdatePetShopConfigInput!) {
-    updatePetShopConfig(id: $id, config: $config) { id configJson { slug nome logo corPrincipal } }
-  }
-`
-const UPDATE_PETSHOP = /* GraphQL */ `
-  mutation UpdatePetShop($id: ID!, $input: UpdatePetShopInput!) {
-    updatePetShop(id: $id, input: $input) { id nomeExibicao razaoSocial endereco cidade estado telefone email }
-  }
-`
-
-type PetShopConfig = {
-  slug?: string | null; nome?: string | null; logo?: string | null; corPrincipal?: string | null
-  aceitaPetsAgressivos?: boolean | null; intervaloBanhoMinutos?: number | null
-  prazoCancelamentoHoras?: number | null; prazoRemarcacaoHoras?: number | null
-  politicaCancelamento?: string | null; toleranciaAtrasoMinutos?: number | null
-  cancelamentoAutomaticoAposAtraso?: boolean | null
-}
-type PetShop = {
-  id: string; nomeExibicao: string; razaoSocial: string; cnpj: string
-  endereco: string; cidade: string; estado: string; telefone: string | null
-  email: string; configJson: PetShopConfig
-}
 
 const schema = z.object({
   nomeExibicao: z.string().min(1, 'Nome é obrigatório'),
@@ -58,16 +21,10 @@ type FormData = z.infer<typeof schema>
 
 export function ConfiguracoesPage() {
   const qc = useQueryClient()
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['myPetshop'],
-    queryFn: () => gqlClient.request<{ myPetShop: PetShop | null }>(MY_PETSHOP),
-  })
-  const updateConfigMutation = useMutation({
-    mutationFn: (vars: { id: string; config: Record<string, unknown> }) => gqlClient.request(UPDATE_CONFIG, vars),
-  })
-  const updatePetShopMutation = useMutation({
-    mutationFn: (vars: { id: string; input: Record<string, unknown> }) => gqlClient.request(UPDATE_PETSHOP, vars),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['myPetshop'] }),
+  const { data, isLoading, error } = useMyPetShopQuery()
+  const updateConfigMutation = useUpdatePetShopConfigMutation()
+  const updatePetShopMutation = useUpdatePetShopMutation({
+    onSuccess: () => qc.invalidateQueries({ queryKey: useMyPetShopQuery.getKey() }),
   })
 
   const [sucesso, setSucesso] = useState('')
@@ -130,7 +87,6 @@ export function ConfiguracoesPage() {
     <>
       <PageHeader title="Configurações" />
       {sucesso && <p style={{ color: 'green', background: '#f0fff0', padding: '8px 12px', borderRadius: 4, marginBottom: 16 }}>{sucesso}</p>}
-
       <form onSubmit={onSubmit}>
         <FormCard title="Dados da Loja">
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -144,10 +100,7 @@ export function ConfiguracoesPage() {
               <input {...form.register('slug')} placeholder="meu-pet-shop" style={inputStyle} />
               <small style={{ color: '#999', fontSize: 12 }}>ex: patafy.com/loja/{slug}</small>
             </div>
-            <div>
-              <label style={labelStyle}>Telefone</label>
-              <input {...form.register('telefone')} style={inputStyle} />
-            </div>
+            <div><label style={labelStyle}>Telefone</label><input {...form.register('telefone')} style={inputStyle} /></div>
             <div>
               <label style={labelStyle}>E-mail *</label>
               <input type="email" {...form.register('email')} style={inputStyle} />
@@ -155,7 +108,6 @@ export function ConfiguracoesPage() {
             </div>
           </div>
         </FormCard>
-
         <FormCard title="Políticas e Prazos">
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <div><label style={labelStyle}>Prazo cancelamento (horas)</label><input type="number" {...form.register('prazoCancelamento')} min="0" style={{ ...inputStyle, width: 120 }} /></div>
@@ -164,11 +116,10 @@ export function ConfiguracoesPage() {
             <div><label style={labelStyle}>Intervalo entre banhos (min)</label><input type="number" {...form.register('intervaloBanho')} min="0" style={{ ...inputStyle, width: 120 }} /></div>
           </div>
           <div style={{ marginTop: 12 }}>
-            <label style={labelStyle}>Política de cancelamento (texto para tutores)</label>
+            <label style={labelStyle}>Política de cancelamento</label>
             <textarea {...form.register('politica')} rows={4} style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
           </div>
         </FormCard>
-
         {e.root && <p style={{ color: 'red', marginBottom: 12 }}>{e.root.message}</p>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="submit" style={btnPrimary}>Salvar Configurações</button>

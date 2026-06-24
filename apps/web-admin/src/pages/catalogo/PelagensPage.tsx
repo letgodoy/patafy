@@ -2,39 +2,26 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { gqlClient } from '../../lib/graphql-client.js'
+import { useQueryClient } from '@tanstack/react-query'
+import { usePelagensQuery, useCreatePelagemMutation, useUpdatePelagemMutation, useSetCatalogItemAtivoMutation } from '@patafy/graphql-client'
+import type { Pelagem } from '@patafy/graphql-client'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
-import type {
-  PelagensQuery,
-  CreatePelagemMutation, CreatePelagemMutationVariables,
-  UpdatePelagemMutation, UpdatePelagemMutationVariables,
-  SetCatalogItemAtivoMutationVariables,
-  Pelagem,
-} from '@patafy/graphql-client'
-
-const PELAGENS_QUERY = /* GraphQL */ `query Pelagens { pelagens { id nome ativo ordem } }`
-const CREATE_PELAGEM = /* GraphQL */ `mutation CreatePelagem($input: CreatePelagemInput!) { createPelagem(input: $input) { id nome ativo ordem } }`
-const UPDATE_PELAGEM = /* GraphQL */ `mutation UpdatePelagem($id: ID!, $input: UpdatePelagemInput!) { updatePelagem(id: $id, input: $input) { id nome ativo ordem } }`
-const SET_ATIVO = /* GraphQL */ `mutation SetCatalogItemAtivo($tipo: String!, $id: ID!, $ativo: Boolean!) { setCatalogItemAtivo(tipo: $tipo, id: $id, ativo: $ativo) }`
 
 const schema = z.object({ nome: z.string().min(1, 'Nome é obrigatório') })
 type FormData = z.infer<typeof schema>
-
 type PelagemRow = Pick<Pelagem, 'id' | 'nome' | 'ativo' | 'ordem'>
 
 export function PelagensPage() {
   const qc = useQueryClient()
-  const { data, isLoading, error } = useQuery({ queryKey: ['pelagens'], queryFn: () => gqlClient.request<PelagensQuery>(PELAGENS_QUERY) })
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['pelagens'] })
-  const createMutation = useMutation({ mutationFn: (vars: CreatePelagemMutationVariables) => gqlClient.request<CreatePelagemMutation>(CREATE_PELAGEM, vars), onSuccess: invalidate })
-  const updateMutation = useMutation({ mutationFn: (vars: UpdatePelagemMutationVariables) => gqlClient.request<UpdatePelagemMutation>(UPDATE_PELAGEM, vars), onSuccess: invalidate })
-  const setAtivoMutation = useMutation({ mutationFn: (vars: SetCatalogItemAtivoMutationVariables) => gqlClient.request(SET_ATIVO, vars), onSuccess: invalidate })
+  const { data, isLoading, error } = usePelagensQuery()
+  const invalidate = () => qc.invalidateQueries({ queryKey: usePelagensQuery.getKey() })
+  const createMutation = useCreatePelagemMutation({ onSuccess: invalidate })
+  const updateMutation = useUpdatePelagemMutation({ onSuccess: invalidate })
+  const setAtivoMutation = useSetCatalogItemAtivoMutation({ onSuccess: invalidate })
 
   const [editando, setEditando] = useState<PelagemRow | null>(null)
   const [mostrarForm, setMostrarForm] = useState(false)
-
   const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { nome: '' } })
 
   const resetForm = () => { setEditando(null); form.reset(); setMostrarForm(false) }

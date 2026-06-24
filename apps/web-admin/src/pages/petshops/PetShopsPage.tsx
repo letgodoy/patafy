@@ -2,33 +2,14 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { gqlClient } from '../../lib/graphql-client.js'
+import { useQueryClient } from '@tanstack/react-query'
+import { useListPetShopsQuery, useCreatePetShopMutation, useCreatePetShopOwnerMutation, useDeactivatePetShopMutation } from '@patafy/graphql-client'
+import type { PetShop } from '@patafy/graphql-client'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
 
-const LIST_PETSHOPS = /* GraphQL */ `
-  query ListPetShops($filter: ListPetShopsFilter) {
-    listPetShops(filter: $filter) {
-      id nomeExibicao cnpj cidade estado email ativo configJson { slug } createdAt
-    }
-  }
-`
-const CREATE_PETSHOP = /* GraphQL */ `
-  mutation CreatePetShop($input: CreatePetShopInput!) {
-    createPetShop(input: $input) { id nomeExibicao cnpj cidade estado email ativo configJson { slug } createdAt }
-  }
-`
-const CREATE_OWNER = /* GraphQL */ `
-  mutation CreatePetShopOwner($input: CreatePetShopOwnerInput!) {
-    createPetShopOwner(input: $input) { id nome email roles }
-  }
-`
-const DEACTIVATE = /* GraphQL */ `mutation DeactivatePetShop($id: ID!) { deactivatePetShop(id: $id) }`
-
-type PetShop = {
-  id: string; nomeExibicao: string; cnpj: string; cidade: string; estado: string
-  email: string; ativo: boolean; configJson: { slug?: string | null }; createdAt: string
+type PetShopRow = Pick<PetShop, 'id' | 'nomeExibicao' | 'cnpj' | 'cidade' | 'estado' | 'email' | 'ativo' | 'createdAt'> & {
+  configJson: { slug?: string | null }
 }
 
 const petShopSchema = z.object({
@@ -50,26 +31,15 @@ const ownerSchema = z.object({
 })
 type PetShopForm = z.infer<typeof petShopSchema>
 type OwnerForm = z.infer<typeof ownerSchema>
-
 type Step = 'petshop' | 'owner' | null
 
 export function PetShopsPage() {
   const qc = useQueryClient()
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['petshops'],
-    queryFn: () => gqlClient.request<{ listPetShops: PetShop[] }>(LIST_PETSHOPS, { filter: {} }),
-  })
-  const createPetShopMutation = useMutation({
-    mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request<{ createPetShop: PetShop }>(CREATE_PETSHOP, vars),
-  })
-  const createOwnerMutation = useMutation({
-    mutationFn: (vars: { input: Record<string, unknown> }) => gqlClient.request(CREATE_OWNER, vars),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['petshops'] }); setSucesso(`Pet shop criado com sucesso! Owner: ${ownerForm.getValues('email')}`) },
-  })
-  const deactivateMutation = useMutation({
-    mutationFn: (id: string) => gqlClient.request(DEACTIVATE, { id }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['petshops'] }),
-  })
+  const { data, isLoading, error } = useListPetShopsQuery()
+  const invalidate = () => qc.invalidateQueries({ queryKey: useListPetShopsQuery.getKey() })
+  const createPetShopMutation = useCreatePetShopMutation()
+  const createOwnerMutation = useCreatePetShopOwnerMutation({ onSuccess: invalidate })
+  const deactivateMutation = useDeactivatePetShopMutation({ onSuccess: invalidate })
 
   const [step, setStep] = useState<Step>(null)
   const [newPetShopId, setNewPetShopId] = useState('')
@@ -97,18 +67,19 @@ export function PetShopsPage() {
       await createOwnerMutation.mutateAsync({
         input: { petshopId: newPetShopId, ...data, telefone: data.telefone || undefined },
       })
+      setSucesso(`Pet shop criado com sucesso! Owner: ${data.email}`)
       resetAll()
     } catch (err: unknown) {
       ownerForm.setError('root', { message: (err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao criar owner' })
     }
   })
 
-  const handleDeactivate = async (ps: PetShop) => {
+  const handleDeactivate = async (ps: PetShopRow) => {
     if (!confirm(`Desativar "${ps.nomeExibicao}"?`)) return
-    await deactivateMutation.mutateAsync(ps.id)
+    await deactivateMutation.mutateAsync({ id: ps.id })
   }
 
-  const columns: Column<PetShop>[] = [
+  const columns: Column<PetShopRow>[] = [
     { key: 'nome', header: 'Nome', render: (ps) => ps.nomeExibicao },
     { key: 'cidade', header: 'Cidade / Estado', render: (ps) => `${ps.cidade} / ${ps.estado}` },
     { key: 'slug', header: 'Slug', render: (ps) => ps.configJson?.slug ?? '—' },
@@ -125,11 +96,7 @@ export function PetShopsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Pet Shops"
-        action={step === null ? <button onClick={() => setStep('petshop')} style={btnPrimary}>+ Novo Pet Shop</button> : undefined}
-      />
-
+      <PageHeader title="Pet Shops" action={step === null ? <button onClick={() => setStep('petshop')} style={btnPrimary}>+ Novo Pet Shop</button> : undefined} />
       {sucesso && <p style={{ color: 'green', background: '#f0fff0', padding: '8px 12px', borderRadius: 4, marginBottom: 16 }}>{sucesso}</p>}
 
       {step === 'petshop' && (
@@ -170,7 +137,7 @@ export function PetShopsPage() {
         </FormCard>
       )}
 
-      <DataTable columns={columns} data={data?.listPetShops ?? []} rowKey={(ps) => ps.id} loading={isLoading} error={error ? String(error) : undefined} rowStyle={(ps) => ({ opacity: ps.ativo ? 1 : 0.5 })} emptyText="Nenhum pet shop cadastrado. Clique em + Novo Pet Shop para começar." />
+      <DataTable columns={columns} data={(data?.listPetShops as PetShopRow[] | undefined) ?? []} rowKey={(ps) => ps.id} loading={isLoading} error={error ? String(error) : undefined} rowStyle={(ps) => ({ opacity: ps.ativo ? 1 : 0.5 })} emptyText="Nenhum pet shop cadastrado. Clique em + Novo Pet Shop para começar." />
     </>
   )
 }

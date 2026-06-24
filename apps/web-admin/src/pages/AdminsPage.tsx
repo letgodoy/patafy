@@ -2,18 +2,11 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { gqlClient } from '../lib/graphql-client.js'
+import { useQueryClient } from '@tanstack/react-query'
+import { useListSystemAdminsQuery, useCreateSystemAdminMutation } from '@patafy/graphql-client'
+import type { SystemAdminUser } from '@patafy/graphql-client'
 import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, inputStyle, labelStyle } from '@patafy/ui'
 import type { Column } from '@patafy/ui'
-import type {
-  ListSystemAdminsQuery,
-  CreateSystemAdminMutation, CreateSystemAdminMutationVariables,
-  SystemAdminUser,
-} from '@patafy/graphql-client'
-
-const ADMINS_QUERY = /* GraphQL */ `query ListSystemAdmins { listSystemAdmins { id email nome ativo createdAt } }`
-const CREATE_ADMIN = /* GraphQL */ `mutation CreateSystemAdmin($input: CreateSystemAdminInput!) { createSystemAdmin(input: $input) { id email nome ativo createdAt } }`
 
 const schema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
@@ -21,25 +14,22 @@ const schema = z.object({
   senha: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
 })
 type FormData = z.infer<typeof schema>
-
 type AdminRow = Pick<SystemAdminUser, 'id' | 'email' | 'nome' | 'ativo' | 'createdAt'>
 
 export function AdminsPage() {
   const qc = useQueryClient()
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['systemAdmins'],
-    queryFn: () => gqlClient.request<ListSystemAdminsQuery>(ADMINS_QUERY),
-  })
-  const createMutation = useMutation({
-    mutationFn: (vars: CreateSystemAdminMutationVariables) => gqlClient.request<CreateSystemAdminMutation>(CREATE_ADMIN, vars),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['systemAdmins'] }); setSucesso('Administrador criado com sucesso.') },
-  })
-
+  const { data, isLoading, error } = useListSystemAdminsQuery()
   const [mostrarForm, setMostrarForm] = useState(false)
   const [sucesso, setSucesso] = useState('')
 
-  const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { nome: '', email: '', senha: '' } })
+  const createMutation = useCreateSystemAdminMutation({
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: useListSystemAdminsQuery.getKey() })
+      setSucesso('Administrador criado com sucesso.')
+    },
+  })
 
+  const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { nome: '', email: '', senha: '' } })
   const resetForm = () => { form.reset(); setMostrarForm(false) }
 
   const onSubmit = form.handleSubmit(async (data) => {
