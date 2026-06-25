@@ -1,13 +1,13 @@
 import { useAuth } from '../contexts/AuthContext.js'
 
 export function DashboardPage() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
 
   return (
-    <main>
-      <h1>Dashboard — Área do Pet Shop</h1>
+    <>
+      <h1 style={{ marginTop: 0 }}>Dashboard — Área do Pet Shop</h1>
       <p>Bem-vindo, {user?.displayName ?? user?.email}</p>
-      <button onClick={signOut}>Sair</button>
-    </main>
+      <p style={{ color: '#666', fontSize: 14 }}>Use o menu lateral para acessar configurações, equipe e bloqueios de agenda.</p>
+    </>
   )
 }

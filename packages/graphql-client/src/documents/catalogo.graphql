@@ -1,0 +1,150 @@
+query TiposAnimal($ativo: Boolean) {
+  tiposAnimal(ativo: $ativo) {
+    id
+    nome
+    ativo
+    ordem
+    createdAt
+  }
+}
+
+mutation CreateTipoAnimal($input: CreateTipoAnimalInput!) {
+  createTipoAnimal(input: $input) {
+    id
+    nome
+    ativo
+    ordem
+  }
+}
+
+mutation UpdateTipoAnimal($id: ID!, $input: UpdateTipoAnimalInput!) {
+  updateTipoAnimal(id: $id, input: $input) {
+    id
+    nome
+    ativo
+    ordem
+  }
+}
+
+query Racas($tipoAnimalId: String, $ativo: Boolean) {
+  racas(tipoAnimalId: $tipoAnimalId, ativo: $ativo) {
+    id
+    nome
+    ativo
+    ordem
+    tipoAnimalId
+    tipoAnimal {
+      id
+      nome
+    }
+    createdAt
+  }
+}
+
+mutation CreateRaca($input: CreateRacaInput!) {
+  createRaca(input: $input) {
+    id
+    nome
+    ativo
+    ordem
+    tipoAnimalId
+    tipoAnimal {
+      id
+      nome
+    }
+  }
+}
+
+mutation UpdateRaca($id: ID!, $input: UpdateRacaInput!) {
+  updateRaca(id: $id, input: $input) {
+    id
+    nome
+    ativo
+    ordem
+    tipoAnimalId
+    tipoAnimal {
+      id
+      nome
+    }
+  }
+}
+
+query Portes($ativo: Boolean) {
+  portes(ativo: $ativo) {
+    id
+    nome
+    ativo
+    ordem
+    createdAt
+  }
+}
+
+mutation CreatePorte($input: CreatePorteInput!) {
+  createPorte(input: $input) {
+    id
+    nome
+    ativo
+    ordem
+  }
+}
+
+mutation UpdatePorte($id: ID!, $input: UpdatePorteInput!) {
+  updatePorte(id: $id, input: $input) {
+    id
+    nome
+    ativo
+    ordem
+  }
+}
+
+query Pelagens($ativo: Boolean) {
+  pelagens(ativo: $ativo) {
+    id
+    nome
+    ativo
+    ordem
+    createdAt
+  }
+}
+
+mutation CreatePelagem($input: CreatePelagemInput!) {
+  createPelagem(input: $input) {
+    id
+    nome
+    ativo
+    ordem
+  }
+}
+
+mutation UpdatePelagem($id: ID!, $input: UpdatePelagemInput!) {
+  updatePelagem(id: $id, input: $input) {
+    id
+    nome
+    ativo
+    ordem
+  }
+}
+
+mutation SetCatalogItemAtivo($tipo: String!, $id: ID!, $ativo: Boolean!) {
+  setCatalogItemAtivo(tipo: $tipo, id: $id, ativo: $ativo)
+}
+
+query ListSystemAdmins {
+  listSystemAdmins {
+    id
+    email
+    nome
+    ativo
+    createdAt
+  }
+}
+
+mutation CreateSystemAdmin($input: CreateSystemAdminInput!) {
+  createSystemAdmin(input: $input) {
+    id
+    email
+    nome
+    ativo
+    createdAt
+  }
+}

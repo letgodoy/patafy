@@ -1,124 +1,79 @@
 import { useState } from 'react'
-import { useQuery, useMutation, Provider } from 'urql'
-import { Layout } from '../../components/Layout.js'
-import { graphqlClient } from '../../lib/graphql-client.js'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useQueryClient } from '@tanstack/react-query'
+import { usePelagensQuery, useCreatePelagemMutation, useUpdatePelagemMutation, useSetCatalogItemAtivoMutation } from '@patafy/graphql-client'
+import type { Pelagem } from '@patafy/graphql-client'
+import { DataTable, PageHeader, FormCard, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle } from '@patafy/ui'
+import type { Column } from '@patafy/ui'
 
-const PELAGENS_QUERY = /* GraphQL */ `
-  query Pelagens { pelagens { id nome ativo ordem } }
-`
-const CREATE_PELAGEM = /* GraphQL */ `
-  mutation CreatePelagem($input: CreatePelagemInput!) { createPelagem(input: $input) { id nome ativo ordem } }
-`
-const UPDATE_PELAGEM = /* GraphQL */ `
-  mutation UpdatePelagem($id: ID!, $input: UpdatePelagemInput!) { updatePelagem(id: $id, input: $input) { id nome ativo ordem } }
-`
-const SET_ATIVO = /* GraphQL */ `
-  mutation SetAtivo($tipo: String!, $id: ID!, $ativo: Boolean!) { setCatalogItemAtivo(tipo: $tipo, id: $id, ativo: $ativo) }
-`
+const schema = z.object({ nome: z.string().min(1, 'Nome é obrigatório') })
+type FormData = z.infer<typeof schema>
+type PelagemRow = Pick<Pelagem, 'id' | 'nome' | 'ativo' | 'ordem'>
 
-type Pelagem = { id: string; nome: string; ativo: boolean; ordem: number | null }
+export function PelagensPage() {
+  const qc = useQueryClient()
+  const { data, isLoading, error } = usePelagensQuery()
+  const invalidate = () => qc.invalidateQueries({ queryKey: usePelagensQuery.getKey() })
+  const createMutation = useCreatePelagemMutation({ onSuccess: invalidate })
+  const updateMutation = useUpdatePelagemMutation({ onSuccess: invalidate })
+  const setAtivoMutation = useSetCatalogItemAtivoMutation({ onSuccess: invalidate })
 
-function PelagensPageInner() {
-  const [{ data, fetching, error }, reexecute] = useQuery({ query: PELAGENS_QUERY })
-  const [, createPelagem] = useMutation(CREATE_PELAGEM)
-  const [, updatePelagem] = useMutation(UPDATE_PELAGEM)
-  const [, setAtivo] = useMutation(SET_ATIVO)
-
-  const [editando, setEditando] = useState<Pelagem | null>(null)
-  const [nome, setNome] = useState('')
-  const [ordem, setOrdem] = useState('')
-  const [erro, setErro] = useState('')
+  const [editando, setEditando] = useState<PelagemRow | null>(null)
   const [mostrarForm, setMostrarForm] = useState(false)
+  const form = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { nome: '' } })
 
-  const resetForm = () => { setNome(''); setOrdem(''); setErro(''); setEditando(null); setMostrarForm(false) }
+  const resetForm = () => { setEditando(null); form.reset(); setMostrarForm(false) }
+  const abrirEdicao = (p: PelagemRow) => { setEditando(p); form.reset({ nome: p.nome }); setMostrarForm(true) }
 
-  const abrirEdicao = (p: Pelagem) => {
-    setEditando(p); setNome(p.nome); setMostrarForm(true)
-  }
+  const onSubmit = form.handleSubmit(async (data) => {
+    try {
+      if (editando) await updateMutation.mutateAsync({ id: editando.id, input: { nome: data.nome.trim() } })
+      else await createMutation.mutateAsync({ input: { nome: data.nome.trim() } })
+      resetForm()
+    } catch (err: unknown) {
+      form.setError('root', { message: (err as { response?: { errors?: { message: string }[] } })?.response?.errors?.[0]?.message ?? 'Erro ao salvar' })
+    }
+  })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErro('')
-    const input = { nome: nome.trim() }
-    const result = editando ? await updatePelagem({ id: editando.id, input }) : await createPelagem({ input })
-    if (result.error) { setErro(result.error.graphQLErrors[0]?.message ?? 'Erro ao salvar'); return }
-    reexecute({ requestPolicy: 'network-only' })
-    resetForm()
-  }
-
-  const handleToggleAtivo = async (p: Pelagem) => {
-    await setAtivo({ tipo: 'pelagem', id: p.id, ativo: !p.ativo })
-    reexecute({ requestPolicy: 'network-only' })
-  }
+  const columns: Column<PelagemRow>[] = [
+    { key: 'nome', header: 'Nome', render: (p) => p.nome },
+    { key: 'ordem', header: 'Ordem', width: 80, render: (p) => p.ordem ?? '—' },
+    { key: 'status', header: 'Status', width: 90, render: (p) => <span style={{ color: p.ativo ? 'green' : '#999' }}>{p.ativo ? 'Ativo' : 'Inativo'}</span> },
+    {
+      key: 'acoes', header: 'Ações', width: 160,
+      render: (p) => (
+        <>
+          <button onClick={() => abrirEdicao(p)} style={btnSmall}>Editar</button>
+          <button onClick={() => setAtivoMutation.mutate({ tipo: 'pelagem', id: p.id, ativo: !p.ativo })} style={{ ...btnSmall, marginLeft: 6, color: p.ativo ? '#c00' : 'green' }}>
+            {p.ativo ? 'Inativar' : 'Ativar'}
+          </button>
+        </>
+      ),
+    },
+  ]
 
   return (
-    <Layout>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ margin: 0 }}>Pelagens</h1>
-        <button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnStyle}>+ Nova Pelagem</button>
-      </div>
-
+    <>
+      <PageHeader title="Pelagens" action={<button onClick={() => { resetForm(); setMostrarForm(true) }} style={btnPrimary}>+ Nova Pelagem</button>} />
       {mostrarForm && (
-        <form onSubmit={handleSubmit} style={formStyle}>
-          <h3 style={{ marginTop: 0 }}>{editando ? 'Editar Pelagem' : 'Nova Pelagem'}</h3>
+        <FormCard title={editando ? 'Editar Pelagem' : 'Nova Pelagem'} onSubmit={onSubmit}>
           <div style={{ display: 'flex', gap: 12 }}>
             <div>
               <label style={labelStyle}>Nome *</label>
-              <input value={nome} onChange={(e) => setNome(e.target.value)} required style={inputStyle} />
+              <input {...form.register('nome')} style={inputStyle} />
+              {form.formState.errors.nome && <p style={{ color: 'red', margin: '4px 0 0', fontSize: 13 }}>{form.formState.errors.nome.message}</p>}
             </div>
           </div>
-          {erro && <p style={{ color: 'red', margin: '8px 0 0' }}>{erro}</p>}
+          {form.formState.errors.root && <p style={{ color: 'red', margin: '8px 0 0' }}>{form.formState.errors.root.message}</p>}
           <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button type="submit" style={btnStyle}>Salvar</button>
-            <button type="button" onClick={resetForm} style={btnSecStyle}>Cancelar</button>
+            <button type="submit" style={btnPrimary}>Salvar</button>
+            <button type="button" onClick={resetForm} style={btnSecondary}>Cancelar</button>
           </div>
-        </form>
+        </FormCard>
       )}
-
-      {fetching && <p>Carregando...</p>}
-      {error && <p style={{ color: 'red' }}>{error.message}</p>}
-
-      {data && (
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Nome</th>
-              <th style={thStyle}>Ordem</th>
-              <th style={thStyle}>Status</th>
-              <th style={thStyle}>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data.pelagens as Pelagem[]).map((p) => (
-              <tr key={p.id} style={{ opacity: p.ativo ? 1 : 0.5 }}>
-                <td style={tdStyle}>{p.nome}</td>
-                <td style={tdStyle}>{p.ordem ?? '—'}</td>
-                <td style={tdStyle}><span style={{ color: p.ativo ? 'green' : '#999' }}>{p.ativo ? 'Ativo' : 'Inativo'}</span></td>
-                <td style={tdStyle}>
-                  <button onClick={() => abrirEdicao(p)} style={btnSmStyle}>Editar</button>
-                  <button onClick={() => handleToggleAtivo(p)} style={{ ...btnSmStyle, marginLeft: 6, color: p.ativo ? '#c00' : 'green' }}>
-                    {p.ativo ? 'Inativar' : 'Ativar'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </Layout>
+      <DataTable columns={columns} data={(data?.pelagens as PelagemRow[] | undefined) ?? []} rowKey={(p) => p.id} loading={isLoading} error={error ? String(error) : undefined} rowStyle={(p) => ({ opacity: p.ativo ? 1 : 0.5 })} />
+    </>
   )
 }
-
-export function PelagensPage() {
-  return <Provider value={graphqlClient}><PelagensPageInner /></Provider>
-}
-
-const btnStyle: React.CSSProperties = { background: '#1a1a2e', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }
-const btnSecStyle: React.CSSProperties = { background: '#fff', color: '#333', border: '1px solid #ccc', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }
-const btnSmStyle: React.CSSProperties = { background: 'none', border: '1px solid #ccc', padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 13 }
-const inputStyle: React.CSSProperties = { display: 'block', padding: '6px 10px', border: '1px solid #ccc', borderRadius: 4, fontSize: 14, width: 220 }
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, marginBottom: 4, color: '#555' }
-const formStyle: React.CSSProperties = { background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8, padding: 20, marginBottom: 24 }
-const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8, overflow: 'hidden' }
-const thStyle: React.CSSProperties = { textAlign: 'left', padding: '10px 16px', background: '#f0f0f0', fontSize: 13, fontWeight: 600 }
-const tdStyle: React.CSSProperties = { padding: '10px 16px', borderTop: '1px solid #eee', fontSize: 14 }

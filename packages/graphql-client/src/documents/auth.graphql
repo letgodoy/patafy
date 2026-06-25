@@ -1,0 +1,45 @@
+query Me {
+  me {
+    id
+    email
+    nome
+    cpf
+    telefone
+    ativo
+    createdAt
+    tutorProfile {
+      id
+      userId
+      endereco
+      ativo
+    }
+    petshopProfiles {
+      id
+      petshopId
+      roles
+      ativo
+    }
+  }
+}
+
+mutation SyncUser {
+  syncUser {
+    id
+    email
+    nome
+    petshopProfiles {
+      id
+      petshopId
+      roles
+      ativo
+    }
+  }
+}
+
+mutation RegisterTutor($input: RegisterTutorInput!) {
+  registerTutor(input: $input) {
+    id
+    nome
+    email
+  }
+}

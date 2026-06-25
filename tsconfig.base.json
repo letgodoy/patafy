@@ -18,7 +18,8 @@
     "paths": {
       "@patafy/shared-types": ["packages/shared-types/src/index.ts"],
       "@patafy/db": ["packages/db/src/index.ts"],
-      "@patafy/graphql-client": ["packages/graphql-client/src/index.ts"]
+      "@patafy/graphql-client": ["packages/graphql-client/src/index.ts"],
+      "@patafy/ui": ["packages/ui/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]
