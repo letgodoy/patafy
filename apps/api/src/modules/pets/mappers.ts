@@ -1,5 +1,4 @@
 import type { Pet, PetTutor, TutorProfile, User, TipoAnimal } from '@patafy/db'
-import { mascararCPF } from '../../lib/cpf.js'
 
 type PetWithRelations = Pet & {
   tipo_animal?: TipoAnimal | null
@@ -44,7 +43,7 @@ export function mapTutorSearch(profile: TutorProfile & { user: User }) {
     userId: profile.user_id,
     nome: profile.user.nome,
     email: profile.user.email,
-    cpf: mascararCPF(profile.user.cpf),
+    cpf: profile.user.cpf,
     telefone: profile.user.telefone,
     endereco: profile.endereco,
     ativo: profile.ativo,

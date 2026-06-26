@@ -6,6 +6,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useSearchTutorQuery } from '@patafy/graphql-client'
 import { PageHeader, FormCard, btnPrimary, btnSecondary, inputStyle, labelStyle, colors } from '@patafy/ui'
 
+function formatarCPF(cpf: string) {
+  return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+}
+
 const schema = z.object({
   busca: z.string().min(1, 'Informe CPF ou e-mail'),
   tipo: z.enum(['cpf', 'email']),
@@ -63,7 +67,7 @@ export function BuscarClientePage() {
             <div style={{ background: '#fff', border: `1px solid ${colors.border}`, borderRadius: 8, padding: 20 }}>
               <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>Cliente encontrado</h3>
               <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', margin: '0 0 20px' }}>
-                {[['Nome', tutor.nome], ['E-mail', tutor.email], ['CPF', tutor.cpf], ['Telefone', tutor.telefone ?? '—']].map(([k, v]) => (
+                {[['Nome', tutor.nome], ['E-mail', tutor.email], ['CPF', formatarCPF(tutor.cpf)], ['Telefone', tutor.telefone ?? '—']].map(([k, v]) => (
                   <div key={k as string}>
                     <dt style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>{k}</dt>
                     <dd style={{ margin: 0, fontSize: 14 }}>{v}</dd>
