@@ -1,0 +1,99 @@
+fragment PetFields on Pet {
+  id
+  nome
+  tipoAnimalId
+  tipoAnimal { id nome }
+  racaId
+  porteId
+  pelagemId
+  idade
+  peso
+  agressivo
+  cuidadosEspeciais
+  obsCompartilhadas
+  tutores { tutorProfileId nome email tipo }
+  deletedAt
+  createdAt
+  updatedAt
+}
+
+query MyPets {
+  myPets { ...PetFields }
+}
+
+query Pet($id: ID!) {
+  pet(id: $id) { ...PetFields }
+}
+
+query MyPetTutorConvites {
+  myPetTutorConvites {
+    id
+    petId
+    pet { ...PetFields }
+    convidadoEmail
+    status
+    expiresAt
+    createdAt
+    acceptedAt
+  }
+}
+
+query SearchTutor($cpf: String, $email: String) {
+  searchTutor(cpf: $cpf, email: $email) {
+    id userId nome email cpf telefone endereco ativo
+  }
+}
+
+query PetForShop($id: ID!) {
+  petForShop(id: $id) {
+    id nome tipoAnimalId tipoAnimal { id nome }
+    racaId porteId pelagemId idade peso agressivo
+    cuidadosEspeciais obsCompartilhadas obsInternas
+    tutores { tutorProfileId nome email tipo }
+    createdAt
+  }
+}
+
+mutation CreatePet($input: CreatePetInput!) {
+  createPet(input: $input) { ...PetFields }
+}
+
+mutation UpdatePet($id: ID!, $input: UpdatePetInput!) {
+  updatePet(id: $id, input: $input) { ...PetFields }
+}
+
+mutation DeletePet($id: ID!) {
+  deletePet(id: $id)
+}
+
+mutation CreatePetTutorConvite($petId: ID!, $convidadoEmail: String!) {
+  createPetTutorConvite(petId: $petId, convidadoEmail: $convidadoEmail) {
+    id petId convidadoEmail status expiresAt createdAt
+  }
+}
+
+mutation AcceptPetTutorConvite($token: String!) {
+  acceptPetTutorConvite(token: $token)
+}
+
+mutation RevokePetTutorConvite($id: ID!) {
+  revokePetTutorConvite(id: $id)
+}
+
+mutation CreateTutorAssisted($input: CreateTutorAssistedInput!) {
+  createTutorAssisted(input: $input) {
+    id userId nome email cpf telefone endereco ativo
+  }
+}
+
+mutation CreatePetForTutor($tutorProfileId: ID!, $input: CreatePetInput!) {
+  createPetForTutor(tutorProfileId: $tutorProfileId, input: $input) { ...PetFields }
+}
+
+mutation UpdatePetObsInternas($input: UpdatePetObsInternasInput!) {
+  updatePetObsInternas(input: $input)
+}
+
+mutation UpdatePetObsCompartilhadas($input: UpdatePetObsCompartilhadasInput!) {
+  updatePetObsCompartilhadas(input: $input)
+}

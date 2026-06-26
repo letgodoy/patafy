@@ -6,6 +6,10 @@ import { CadastroPage } from './pages/CadastroPage.js'
 import { DashboardPage } from './pages/DashboardPage.js'
 import { LojasPage } from './pages/LojasPage.js'
 import { LojaPage } from './pages/LojaPage.js'
+import { PetsPage } from './pages/PetsPage.js'
+import { PetFormPage } from './pages/PetFormPage.js'
+import { PetDetailPage } from './pages/PetDetailPage.js'
+import { AceitarConvitePage } from './pages/AceitarConvitePage.js'
 
 export default function App() {
   return (
@@ -13,9 +17,14 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/cadastro" element={<CadastroPage />} />
+        <Route path="/convites/aceitar" element={<ProtectedRoute><AceitarConvitePage /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         <Route path="/lojas" element={<ProtectedRoute><LojasPage /></ProtectedRoute>} />
         <Route path="/loja/:slug" element={<ProtectedRoute><LojaPage /></ProtectedRoute>} />
+        <Route path="/pets" element={<ProtectedRoute><PetsPage /></ProtectedRoute>} />
+        <Route path="/pets/novo" element={<ProtectedRoute><PetFormPage /></ProtectedRoute>} />
+        <Route path="/pets/:id/editar" element={<ProtectedRoute><PetFormPage /></ProtectedRoute>} />
+        <Route path="/pets/:id" element={<ProtectedRoute><PetDetailPage /></ProtectedRoute>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<h1>404 — Página não encontrada</h1>} />
       </Routes>

@@ -8,6 +8,9 @@ import { DashboardPage } from './pages/DashboardPage.js'
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage.js'
 import { EquipePage } from './pages/EquipePage.js'
 import { BloqueiosPage } from './pages/BloqueiosPage.js'
+import { BuscarClientePage } from './pages/clientes/BuscarClientePage.js'
+import { NovoClientePage } from './pages/clientes/NovoClientePage.js'
+import { NovoPetClientePage } from './pages/clientes/NovoPetClientePage.js'
 
 export default function App() {
   return (
@@ -20,6 +23,9 @@ export default function App() {
           <Route path="/configuracoes" element={<ConfiguracoesPage />} />
           <Route path="/equipe" element={<EquipePage />} />
           <Route path="/bloqueios" element={<BloqueiosPage />} />
+          <Route path="/clientes/buscar" element={<BuscarClientePage />} />
+          <Route path="/clientes/novo" element={<NovoClientePage />} />
+          <Route path="/clientes/:tutorProfileId/pets/novo" element={<NovoPetClientePage />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<h1>404 — Página não encontrada</h1>} />
