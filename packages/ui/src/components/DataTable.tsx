@@ -1,3 +1,4 @@
+import React from 'react'
 import type { CSSProperties } from 'react'
 import { colors } from '../tokens.js'
 
@@ -16,9 +17,10 @@ type Props<T> = {
   error?: string
   emptyText?: string
   rowStyle?: (row: T) => CSSProperties
+  expandedRow?: (row: T) => React.ReactNode
 }
 
-export function DataTable<T>({ columns, data, rowKey, loading, error, emptyText = 'Nenhum item encontrado.', rowStyle }: Props<T>) {
+export function DataTable<T>({ columns, data, rowKey, loading, error, emptyText = 'Nenhum item encontrado.', rowStyle, expandedRow }: Props<T>) {
   return (
     <div style={tableWrapStyle}>
       <table style={tableStyle}>
@@ -54,13 +56,22 @@ export function DataTable<T>({ columns, data, rowKey, loading, error, emptyText 
             </tr>
           )}
           {!loading && !error && data.map((row) => (
-            <tr key={rowKey(row)} style={rowStyle?.(row)}>
-              {columns.map((col) => (
-                <td key={col.key} style={tdStyle}>
-                  {col.render(row)}
-                </td>
-              ))}
-            </tr>
+            <React.Fragment key={rowKey(row)}>
+              <tr style={rowStyle?.(row)}>
+                {columns.map((col) => (
+                  <td key={col.key} style={tdStyle}>
+                    {col.render(row)}
+                  </td>
+                ))}
+              </tr>
+              {expandedRow && (
+                <tr>
+                  <td colSpan={columns.length} style={{ padding: 0 }}>
+                    {expandedRow(row)}
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
           ))}
         </tbody>
       </table>
