@@ -1,0 +1,49 @@
+fragment PacoteItemFields on PacoteItemDef {
+  id pacoteId servicoVarianteId quantidadeTotal quantidadeUsada restante
+}
+
+fragment PacoteFields on Pacote {
+  id petshopId nome descricao travado descontoPercentual validade ativo
+  items { ...PacoteItemFields }
+}
+
+fragment SaldoItemFields on SaldoItem {
+  servicoVarianteId servicoNome quantidadeTotal quantidadeUsada restante
+}
+
+fragment SaldoFields on SaldoPacotePet {
+  id pacoteId pacoteNome dataAtivacao dataExpiracao status
+  items { ...SaldoItemFields }
+}
+
+query ListPacotes($petshopId: ID!) {
+  listPacotes(petshopId: $petshopId) { ...PacoteFields }
+}
+
+query ListPacotesPorPet($petId: ID!) {
+  listPacotesPorPet(petId: $petId) { ...SaldoFields }
+}
+
+mutation CreatePacote($petshopId: ID!, $input: CreatePacoteInput!) {
+  createPacote(petshopId: $petshopId, input: $input) { ...PacoteFields }
+}
+
+mutation UpdatePacote($id: ID!, $input: UpdatePacoteInput!) {
+  updatePacote(id: $id, input: $input) { ...PacoteFields }
+}
+
+mutation AddPacoteItem($pacoteId: ID!, $servicoVarianteId: ID!, $quantidadeTotal: Int!) {
+  addPacoteItem(pacoteId: $pacoteId, servicoVarianteId: $servicoVarianteId, quantidadeTotal: $quantidadeTotal) { ...PacoteFields }
+}
+
+mutation RemovePacoteItem($pacoteItemId: ID!) {
+  removePacoteItem(pacoteItemId: $pacoteItemId) { ...PacoteFields }
+}
+
+mutation VenderPacoteTravado($pacoteId: ID!, $petId: ID!, $dataAtivacao: String!) {
+  venderPacoteTravado(pacoteId: $pacoteId, petId: $petId, dataAtivacao: $dataAtivacao) { ...SaldoFields }
+}
+
+mutation VenderPacotePersonalizado($petshopId: ID!, $petId: ID!, $itens: [ItemVendaInput!]!, $descontoPercentual: Float, $dataAtivacao: String!) {
+  venderPacotePersonalizado(petshopId: $petshopId, petId: $petId, itens: $itens, descontoPercentual: $descontoPercentual, dataAtivacao: $dataAtivacao) { ...SaldoFields }
+}

@@ -1,0 +1,52 @@
+fragment CategoriaFields on CategoriaServico {
+  id petshopId nome ordem ativo
+}
+
+fragment VarianteFields on ServicoVariante {
+  id servicoId porteId racaId pelagemId duracaoMinutos preco ativo
+}
+
+fragment ServicoFields on Servico {
+  id petshopId categoriaId nome descricao ativo
+  variantes { ...VarianteFields }
+}
+
+query ListCategorias($petshopId: ID!) {
+  listCategorias(petshopId: $petshopId) { ...CategoriaFields }
+}
+
+query ListServicos($petshopId: ID!, $petId: ID) {
+  listServicos(petshopId: $petshopId, petId: $petId) { ...ServicoFields }
+}
+
+query GetServico($id: ID!) {
+  getServico(id: $id) { ...ServicoFields }
+}
+
+mutation CreateCategoria($petshopId: ID!, $input: CreateCategoriaInput!) {
+  createCategoria(petshopId: $petshopId, input: $input) { ...CategoriaFields }
+}
+
+mutation UpdateCategoria($id: ID!, $input: UpdateCategoriaInput!) {
+  updateCategoria(id: $id, input: $input) { ...CategoriaFields }
+}
+
+mutation CreateServico($petshopId: ID!, $input: CreateServicoInput!) {
+  createServico(petshopId: $petshopId, input: $input) { ...ServicoFields }
+}
+
+mutation UpdateServico($id: ID!, $input: UpdateServicoInput!) {
+  updateServico(id: $id, input: $input) { ...ServicoFields }
+}
+
+mutation DeactivateServico($id: ID!) {
+  deactivateServico(id: $id)
+}
+
+mutation CreateServicoVariante($input: CreateServicoVarianteInput!) {
+  createServicoVariante(input: $input) { ...VarianteFields }
+}
+
+mutation UpdateServicoVariante($id: ID!, $input: UpdateServicoVarianteInput!) {
+  updateServicoVariante(id: $id, input: $input) { ...VarianteFields }
+}
