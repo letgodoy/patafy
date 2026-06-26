@@ -1,0 +1,11 @@
+fragment SlotFields on SlotDisponivel {
+  inicio fim banhistaId banhistaNome
+}
+
+query AvailableSlots($input: AvailableSlotsInput!) {
+  availableSlots(input: $input) { ...SlotFields }
+}
+
+query AvailableBanhistas($input: AvailableBanhistasInput!) {
+  availableBanhistas(input: $input) { id nome }
+}
