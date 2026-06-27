@@ -6,6 +6,7 @@ import { petshopsTypeDefs, petshopsResolvers } from './modules/petshops/index.js
 import { petsTypeDefs, petsResolvers } from './modules/pets/index.js'
 import { servicosTypeDefs, servicosResolvers } from './modules/servicos/index.js'
 import { pacotesTypeDefs, pacotesResolvers } from './modules/pacotes/index.js'
+import { agendamentosTypeDefs, agendamentosResolvers } from './modules/agendamentos/index.js'
 
 const baseTypeDefs = /* GraphQL */ `
   type Query {
@@ -24,6 +25,6 @@ const baseResolvers = {
 }
 
 export const schema = createSchema<GraphQLContext>({
-  typeDefs: [baseTypeDefs, authTypeDefs, catalogoGlobalTypeDefs, petshopsTypeDefs, petsTypeDefs, servicosTypeDefs, pacotesTypeDefs],
-  resolvers: [baseResolvers, authResolvers, catalogoGlobalResolvers, petshopsResolvers, petsResolvers, servicosResolvers, pacotesResolvers],
+  typeDefs: [baseTypeDefs, authTypeDefs, catalogoGlobalTypeDefs, petshopsTypeDefs, petsTypeDefs, servicosTypeDefs, pacotesTypeDefs, agendamentosTypeDefs],
+  resolvers: [baseResolvers, authResolvers, catalogoGlobalResolvers, petshopsResolvers, petsResolvers, servicosResolvers, pacotesResolvers, agendamentosResolvers],
 })
