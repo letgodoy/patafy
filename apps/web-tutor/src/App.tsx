@@ -12,6 +12,8 @@ import { PetDetailPage } from './pages/PetDetailPage.js'
 import { AceitarConvitePage } from './pages/AceitarConvitePage.js'
 import { LojaServicosPage } from './pages/servicos/LojaServicosPage.js'
 import { PetPacotesPage } from './pages/PetPacotesPage.js'
+import { AgendarPage } from './pages/agendamentos/AgendarPage.js'
+import { AgendamentosPage } from './pages/agendamentos/AgendamentosPage.js'
 
 export default function App() {
   return (
@@ -29,6 +31,8 @@ export default function App() {
         <Route path="/pets/:id" element={<ProtectedRoute><PetDetailPage /></ProtectedRoute>} />
         <Route path="/pets/:id/pacotes" element={<ProtectedRoute><PetPacotesPage /></ProtectedRoute>} />
         <Route path="/loja/:slug/servicos" element={<ProtectedRoute><LojaServicosPage /></ProtectedRoute>} />
+        <Route path="/loja/:slug/agendar" element={<ProtectedRoute><AgendarPage /></ProtectedRoute>} />
+        <Route path="/agendamentos" element={<ProtectedRoute><AgendamentosPage /></ProtectedRoute>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<h1>404 — Página não encontrada</h1>} />
       </Routes>

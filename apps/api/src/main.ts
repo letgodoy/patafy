@@ -4,6 +4,7 @@ import { createYoga } from 'graphql-yoga'
 import { prisma } from './lib/prisma.js'
 import { schema } from './schema.js'
 import { buildContext } from './context.js'
+import { registerIcsRoute } from './plugins/ics.js'
 
 const PORT = Number(process.env['PORT'] ?? 3000)
 const HOST = process.env['HOST'] ?? '0.0.0.0'
@@ -53,6 +54,8 @@ async function bootstrap() {
       return reply
     },
   })
+
+  await registerIcsRoute(app, prisma)
 
   await app.listen({ port: PORT, host: HOST })
   app.log.info(`API running at http://${HOST}:${PORT}`)
