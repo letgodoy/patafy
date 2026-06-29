@@ -1,0 +1,34 @@
+fragment AtendimentoFields on Atendimento {
+  id agendamentoId banhistaId
+  observacoesGerais observacoesInternas
+  createdAt updatedAt
+  adicionais { id servicoVarianteId precoCobrado createdAt }
+}
+
+query AtendimentoByAgendamento($agendamentoId: ID!) {
+  atendimentoByAgendamento(agendamentoId: $agendamentoId) { ...AtendimentoFields }
+}
+
+mutation StartAtendimento($agendamentoId: ID!) {
+  startAtendimento(agendamentoId: $agendamentoId) { ...AtendimentoFields }
+}
+
+mutation MarkPronto($agendamentoId: ID!) {
+  markPronto(agendamentoId: $agendamentoId) { ...AtendimentoFields }
+}
+
+mutation FinalizarAtendimento($agendamentoId: ID!) {
+  finalizarAtendimento(agendamentoId: $agendamentoId) { ...AtendimentoFields }
+}
+
+mutation AddServicoAdicional($input: AddServicoAdicionalInput!) {
+  addServicoAdicional(input: $input) { ...AtendimentoFields }
+}
+
+mutation UpdateObservacoesGerais($atendimentoId: ID!, $texto: String!) {
+  updateObservacoesGerais(atendimentoId: $atendimentoId, texto: $texto) { ...AtendimentoFields }
+}
+
+mutation UpdateObservacoesInternas($atendimentoId: ID!, $texto: String!) {
+  updateObservacoesInternas(atendimentoId: $atendimentoId, texto: $texto) { ...AtendimentoFields }
+}
