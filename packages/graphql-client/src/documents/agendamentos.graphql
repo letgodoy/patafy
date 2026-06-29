@@ -1,3 +1,15 @@
+fragment AgendamentoFields on Agendamento {
+  id petshopId petId tutorProfileId
+  dataHoraInicio duracaoTotalMinutos
+  banhistaId banhistaFixadoPeloTutor
+  status origem pago precisaTransporte
+  createdAt updatedAt
+  servicos { id servicoVarianteId ordem }
+  pet { id nome tipoAnimal raca porte }
+  tutor { id nome email telefone }
+  banhista { id nome }
+}
+
 fragment SlotFields on SlotDisponivel {
   inicio fim banhistaId banhistaNome
 }
@@ -8,4 +20,48 @@ query AvailableSlots($input: AvailableSlotsInput!) {
 
 query AvailableBanhistas($input: AvailableBanhistasInput!) {
   availableBanhistas(input: $input) { id nome }
+}
+
+query MyAgendamentos($upcoming: Boolean) {
+  myAgendamentos(upcoming: $upcoming) { ...AgendamentoFields }
+}
+
+query AgendaPetShop($petshopId: ID!, $from: String!, $to: String!, $filters: AgendaPetShopFilters) {
+  agendaPetShop(petshopId: $petshopId, from: $from, to: $to, filters: $filters) { ...AgendamentoFields }
+}
+
+query GetAgendamento($id: ID!) {
+  agendamento(id: $id) { ...AgendamentoFields }
+}
+
+mutation CreateAgendamento($input: CreateAgendamentoInput!) {
+  createAgendamento(input: $input) { ...AgendamentoFields }
+}
+
+mutation ConfirmAgendamento($id: ID!) {
+  confirmAgendamento(id: $id) { ...AgendamentoFields }
+}
+
+mutation CancelAgendamento($id: ID!) {
+  cancelAgendamento(id: $id) { ...AgendamentoFields }
+}
+
+mutation RescheduleAgendamento($id: ID!, $input: RescheduleAgendamentoInput!) {
+  rescheduleAgendamento(id: $id, input: $input) { ...AgendamentoFields }
+}
+
+mutation UpdateAgendamentoStatus($id: ID!, $status: String!) {
+  updateAgendamentoStatus(id: $id, status: $status) { ...AgendamentoFields }
+}
+
+mutation MarkNaoCompareceu($id: ID!) {
+  markNaoCompareceu(id: $id) { ...AgendamentoFields }
+}
+
+mutation AssignBanhista($id: ID!, $banhistaId: ID!) {
+  assignBanhista(id: $id, banhistaId: $banhistaId) { ...AgendamentoFields }
+}
+
+mutation TogglePago($id: ID!) {
+  togglePago(id: $id) { ...AgendamentoFields }
 }

@@ -15,6 +15,7 @@ import { CategoriasPage } from './pages/servicos/CategoriasPage.js'
 import { ServicosPage } from './pages/servicos/ServicosPage.js'
 import { PacotesPage } from './pages/pacotes/PacotesPage.js'
 import { VenderPacotePage } from './pages/pacotes/VenderPacotePage.js'
+import { AgendaPage } from './pages/agenda/AgendaPage.js'
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/servicos" element={<ServicosPage />} />
           <Route path="/pacotes" element={<PacotesPage />} />
           <Route path="/pacotes/vender" element={<VenderPacotePage />} />
+          <Route path="/agenda" element={<AgendaPage />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<h1>404 — Página não encontrada</h1>} />
