@@ -1,9 +1,11 @@
 import type { PrismaClient, User, TutorProfile, PetshopUserProfile } from '@patafy/db'
 import type { DecodedIdToken } from 'firebase-admin/auth'
 import { admin } from './plugins/firebase-auth.js'
+import { createLoaders, type Loaders } from './lib/loaders.js'
 
 export interface GraphQLContext {
   prisma: PrismaClient
+  loaders: Loaders
   firebaseUser: DecodedIdToken | null
   user: User | null
   tutorProfile: TutorProfile | null
@@ -27,8 +29,10 @@ export async function buildContext(
     }
   }
 
+  const loaders = createLoaders(prisma)
+
   if (!firebaseUser) {
-    return { prisma, firebaseUser: null, user: null, tutorProfile: null, petshopProfiles: [], activePetshopId: null, isSystemAdmin: false }
+    return { prisma, loaders, firebaseUser: null, user: null, tutorProfile: null, petshopProfiles: [], activePetshopId: null, isSystemAdmin: false }
   }
 
   const userRecord = await prisma.user.findUnique({
@@ -38,6 +42,7 @@ export async function buildContext(
 
   return {
     prisma,
+    loaders,
     firebaseUser,
     user: userRecord,
     tutorProfile: userRecord?.tutor_profile ?? null,

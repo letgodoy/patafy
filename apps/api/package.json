@@ -16,6 +16,7 @@
     "@graphql-yoga/plugin-response-cache": "^3.0.0",
     "@patafy/db": "workspace:*",
     "@patafy/shared-types": "workspace:*",
+    "dataloader": "^2.2.3",
     "fastify": "^5.0.0",
     "fastify-plugin": "^5.0.0",
     "firebase-admin": "^13.0.0",
