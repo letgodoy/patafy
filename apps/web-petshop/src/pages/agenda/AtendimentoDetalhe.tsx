@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useAtendimentoByAgendamentoQuery, useStartAtendimentoMutation, useMarkProntoMutation, useFinalizarAtendimentoMutation, useAddServicoAdicionalMutation, useUpdateObservacoesGeraisMutation, useUpdateObservacoesInternasMutation, useListServicosQuery, useMyPetShopIdQuery } from '@patafy/graphql-client'
+import { useAtendimentoByAgendamentoQuery, useStartAtendimentoMutation, useMarkProntoMutation, useFinalizarAtendimentoMutation, useAddServicoAdicionalMutation, useUpdateObservacoesGeraisMutation, useUpdateObservacoesInternasMutation, useListServicosQuery, useMyPetShopIdQuery, useRegistrosPorAgendamentoQuery } from '@patafy/graphql-client'
 import { PageHeader, btnPrimary, btnSecondary, btnSmall, inputStyle, labelStyle, colors } from '@patafy/ui'
 import { useQueryClient } from '@tanstack/react-query'
+import { RegistroTimeline } from '../auditoria/RegistroTimeline.js'
 
 type Props = { agendamentoId: string; petNome: string; tutorNome: string; onClose: () => void }
 
@@ -16,6 +17,9 @@ export function AtendimentoDetalhe({ agendamentoId, petNome, tutorNome, onClose 
   const { data, refetch } = useAtendimentoByAgendamentoQuery({ agendamentoId })
   const at = data?.atendimentoByAgendamento
 
+  const { data: auditData, refetch: refetchAudit } = useRegistrosPorAgendamentoQuery({ agendamentoId })
+  const registros = auditData?.registrosPorAgendamento ?? []
+
   const { data: servicosData } = useListServicosQuery({ petshopId }, { enabled: !!petshopId })
   const servicos = (servicosData?.listServicos as Servico[] | undefined) ?? []
 
@@ -26,7 +30,7 @@ export function AtendimentoDetalhe({ agendamentoId, petNome, tutorNome, onClose 
   const [obsGeralMode, setObsGeralMode] = useState(false)
   const [obsInternaMode, setObsInternaMode] = useState(false)
 
-  const invalidate = () => refetch()
+  const invalidate = () => { refetch(); refetchAudit() }
 
   const startMutation = useStartAtendimentoMutation({ onSuccess: invalidate })
   const prontoMutation = useMarkProntoMutation({ onSuccess: invalidate })
@@ -123,7 +127,7 @@ export function AtendimentoDetalhe({ agendamentoId, petNome, tutorNome, onClose 
       </div>
 
       {/* Observações internas */}
-      <div style={{ background: '#fff', border: `1px solid ${colors.border}`, borderRadius: 8, padding: 16 }}>
+      <div style={{ background: '#fff', border: `1px solid ${colors.border}`, borderRadius: 8, padding: 16, marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <h4 style={{ margin: 0 }}>Notas internas (apenas staff)</h4>
           <button onClick={() => { setObsInterna(at.observacoesInternas ?? ''); setObsInternaMode(true) }} style={btnSmall}>Editar</button>
@@ -139,6 +143,12 @@ export function AtendimentoDetalhe({ agendamentoId, petNome, tutorNome, onClose 
         ) : (
           <p style={{ margin: 0, fontSize: 13, color: at.observacoesInternas ? '#333' : '#999' }}>{at.observacoesInternas ?? 'Sem notas internas.'}</p>
         )}
+      </div>
+
+      {/* Timeline de auditoria */}
+      <div style={{ background: '#fff', border: `1px solid ${colors.border}`, borderRadius: 8, padding: 16 }}>
+        <h4 style={{ margin: '0 0 16px' }}>Histórico de alterações</h4>
+        <RegistroTimeline registros={registros} />
       </div>
     </div>
   )

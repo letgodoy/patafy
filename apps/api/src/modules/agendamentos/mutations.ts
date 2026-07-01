@@ -7,6 +7,7 @@ import { assertTransition } from './state-machine.js'
 import { loadPetshopConfig, loadBanhistas, loadAgendamentosParaSlot, loadBloqueios, calcularDuracao, findAgendamento, mapAgendamento, AGENDAMENTO_INCLUDE } from './agendamento.helpers.js'
 import { criarComLock } from './agendamento.service.js'
 import { buildAgendamentoPayload, enqueueOutbox } from '../notificacoes/enqueue.js'
+import { auditLog } from '../auditoria/audit.service.js'
 
 export const agendamentosMutations = {
   createAgendamento: async (_: unknown, { input }: { input: { petshopId: string; petId: string; servicoVarianteIds: string[]; dataHoraInicio: string; banhistaId?: string; banhistaFixadoPeloTutor?: boolean; precisaTransporte?: boolean } }, ctx: GraphQLContext) => {
@@ -53,11 +54,19 @@ export const agendamentosMutations = {
       origem: isStaff ? 'atendente' : 'tutor',
     })
 
-    // Enfileira notificações após a transação principal
     const payload = await buildAgendamentoPayload(ctx.prisma, ag.id)
     await ctx.prisma.$transaction(async (tx) => {
       await enqueueOutbox(tx, 'agendado', payload)
       if (isStaff) await enqueueOutbox(tx, 'confirmado', payload)
+      await auditLog(tx, {
+        actorUserId: ctx.user?.id ?? null,
+        petshopId: input.petshopId,
+        agendamentoId: ag.id,
+        entityType: 'Agendamento',
+        entityId: ag.id,
+        action: 'CREATED',
+        metadata: { origem: isStaff ? 'atendente' : 'tutor', servicoVarianteIds: input.servicoVarianteIds },
+      })
     })
 
     return mapAgendamento(ag)
@@ -71,6 +80,7 @@ export const agendamentosMutations = {
     const updated = await ctx.prisma.$transaction(async (tx) => {
       const result = await tx.agendamento.update({ where: { id }, data: { status: 'Confirmado' }, include: AGENDAMENTO_INCLUDE })
       await enqueueOutbox(tx, 'confirmado', payload)
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: id, entityType: 'Agendamento', entityId: id, action: 'STATUS_CHANGED', metadata: { from: ag.status, to: 'Confirmado' } })
       return result
     })
     return mapAgendamento(updated)
@@ -97,6 +107,7 @@ export const agendamentosMutations = {
     const updated = await ctx.prisma.$transaction(async (tx) => {
       const result = await tx.agendamento.update({ where: { id }, data: { status: 'Cancelado' }, include: AGENDAMENTO_INCLUDE })
       await enqueueOutbox(tx, 'cancelado', payload)
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: id, entityType: 'Agendamento', entityId: id, action: 'CANCELLED', metadata: { from: ag.status, motivo: isTutorDono && !isStaff ? 'tutor' : 'staff' } })
       return result
     })
     return mapAgendamento(updated)
@@ -138,6 +149,7 @@ export const agendamentosMutations = {
         include: AGENDAMENTO_INCLUDE,
       })
       await enqueueOutbox(tx, 'alterado', { ...payload, dataHoraInicio: novaData })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: id, entityType: 'Agendamento', entityId: id, action: 'RESCHEDULED', metadata: { old_inicio: ag.data_hora_inicio.toISOString(), new_inicio: novaData.toISOString() } })
       return result
     })
     return mapAgendamento(updated)
@@ -147,7 +159,11 @@ export const agendamentosMutations = {
     const ag = await findAgendamento(ctx, id)
     requirePetshopRole(ctx, ag.petshop_id, ['owner', 'atendente', 'banhista'])
     assertTransition(ag.status as AgendamentoStatus, status as AgendamentoStatus)
-    const updated = await ctx.prisma.agendamento.update({ where: { id }, data: { status: status as AgendamentoStatus }, include: AGENDAMENTO_INCLUDE })
+    const updated = await ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.agendamento.update({ where: { id }, data: { status: status as AgendamentoStatus }, include: AGENDAMENTO_INCLUDE })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: id, entityType: 'Agendamento', entityId: id, action: 'STATUS_CHANGED', metadata: { from: ag.status, to: status } })
+      return result
+    })
     return mapAgendamento(updated)
   },
 
@@ -155,7 +171,11 @@ export const agendamentosMutations = {
     const ag = await findAgendamento(ctx, id)
     requirePetshopRole(ctx, ag.petshop_id, ['owner', 'atendente'])
     assertTransition(ag.status as AgendamentoStatus, 'NaoCompareceu')
-    const updated = await ctx.prisma.agendamento.update({ where: { id }, data: { status: 'NaoCompareceu' }, include: AGENDAMENTO_INCLUDE })
+    const updated = await ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.agendamento.update({ where: { id }, data: { status: 'NaoCompareceu' }, include: AGENDAMENTO_INCLUDE })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: id, entityType: 'Agendamento', entityId: id, action: 'NAO_COMPARECEU', metadata: { motivo: 'manual' } })
+      return result
+    })
     return mapAgendamento(updated)
   },
 
@@ -163,14 +183,22 @@ export const agendamentosMutations = {
     const ag = await findAgendamento(ctx, id)
     requirePetshopRole(ctx, ag.petshop_id, ['owner', 'atendente'])
     if (ag.banhista_fixado_pelo_tutor) throw new GraphQLError('Banhista foi escolhido pelo tutor e não pode ser alterado', { extensions: { code: 'FORBIDDEN' } })
-    const updated = await ctx.prisma.agendamento.update({ where: { id }, data: { banhista_id: banhistaId }, include: AGENDAMENTO_INCLUDE })
+    const updated = await ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.agendamento.update({ where: { id }, data: { banhista_id: banhistaId }, include: AGENDAMENTO_INCLUDE })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: id, entityType: 'Agendamento', entityId: id, action: 'BANHISTA_CHANGED', metadata: { old_id: ag.banhista_id, new_id: banhistaId, silencioso: !ag.banhista_fixado_pelo_tutor } })
+      return result
+    })
     return mapAgendamento(updated)
   },
 
   togglePago: async (_: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
     const ag = await findAgendamento(ctx, id)
     requirePetshopRole(ctx, ag.petshop_id, ['owner', 'atendente'])
-    const updated = await ctx.prisma.agendamento.update({ where: { id }, data: { pago: !ag.pago }, include: AGENDAMENTO_INCLUDE })
+    const updated = await ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.agendamento.update({ where: { id }, data: { pago: !ag.pago }, include: AGENDAMENTO_INCLUDE })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: id, entityType: 'Agendamento', entityId: id, action: 'PAGO_TOGGLED', metadata: { old: ag.pago, new: !ag.pago } })
+      return result
+    })
     return mapAgendamento(updated)
   },
 }

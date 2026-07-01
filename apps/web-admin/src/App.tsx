@@ -11,6 +11,7 @@ import { PortesPage } from './pages/catalogo/PortesPage.js'
 import { PelagensPage } from './pages/catalogo/PelagensPage.js'
 import { AdminsPage } from './pages/AdminsPage.js'
 import { PetShopsPage } from './pages/petshops/PetShopsPage.js'
+import { AuditoriaPage } from './pages/AuditoriaPage.js'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/catalogo/portes" element={<PortesPage />} />
           <Route path="/catalogo/pelagens" element={<PelagensPage />} />
           <Route path="/admins" element={<AdminsPage />} />
+          <Route path="/auditoria" element={<AuditoriaPage />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<h1>404 — Página não encontrada</h1>} />
