@@ -6,6 +6,7 @@ import type { AgendamentoStatus } from './state-machine.js'
 import { assertTransition } from './state-machine.js'
 import { loadPetshopConfig, loadBanhistas, loadAgendamentosParaSlot, loadBloqueios, calcularDuracao, findAgendamento, mapAgendamento, AGENDAMENTO_INCLUDE } from './agendamento.helpers.js'
 import { criarComLock } from './agendamento.service.js'
+import { buildAgendamentoPayload, enqueueOutbox } from '../notificacoes/enqueue.js'
 
 export const agendamentosMutations = {
   createAgendamento: async (_: unknown, { input }: { input: { petshopId: string; petId: string; servicoVarianteIds: string[]; dataHoraInicio: string; banhistaId?: string; banhistaFixadoPeloTutor?: boolean; precisaTransporte?: boolean } }, ctx: GraphQLContext) => {
@@ -52,6 +53,13 @@ export const agendamentosMutations = {
       origem: isStaff ? 'atendente' : 'tutor',
     })
 
+    // Enfileira notificações após a transação principal
+    const payload = await buildAgendamentoPayload(ctx.prisma, ag.id)
+    await ctx.prisma.$transaction(async (tx) => {
+      await enqueueOutbox(tx, 'agendado', payload)
+      if (isStaff) await enqueueOutbox(tx, 'confirmado', payload)
+    })
+
     return mapAgendamento(ag)
   },
 
@@ -59,7 +67,12 @@ export const agendamentosMutations = {
     const ag = await findAgendamento(ctx, id)
     requirePetshopRole(ctx, ag.petshop_id, ['owner', 'atendente'])
     assertTransition(ag.status as AgendamentoStatus, 'Confirmado')
-    const updated = await ctx.prisma.agendamento.update({ where: { id }, data: { status: 'Confirmado' }, include: AGENDAMENTO_INCLUDE })
+    const payload = await buildAgendamentoPayload(ctx.prisma, id)
+    const updated = await ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.agendamento.update({ where: { id }, data: { status: 'Confirmado' }, include: AGENDAMENTO_INCLUDE })
+      await enqueueOutbox(tx, 'confirmado', payload)
+      return result
+    })
     return mapAgendamento(updated)
   },
 
@@ -80,7 +93,12 @@ export const agendamentosMutations = {
       }
     }
 
-    const updated = await ctx.prisma.agendamento.update({ where: { id }, data: { status: 'Cancelado' }, include: AGENDAMENTO_INCLUDE })
+    const payload = await buildAgendamentoPayload(ctx.prisma, id)
+    const updated = await ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.agendamento.update({ where: { id }, data: { status: 'Cancelado' }, include: AGENDAMENTO_INCLUDE })
+      await enqueueOutbox(tx, 'cancelado', payload)
+      return result
+    })
     return mapAgendamento(updated)
   },
 
@@ -112,10 +130,15 @@ export const agendamentosMutations = {
     const slotOk = slots.some((s) => new Date(s.inicio).getTime() === novaData.getTime())
     if (!slotOk) throw new GraphQLError('Horário não disponível', { extensions: { code: 'SLOT_UNAVAILABLE' } })
 
-    const updated = await ctx.prisma.agendamento.update({
-      where: { id },
-      data: { data_hora_inicio: novaData, banhista_id: novoBanhistaId },
-      include: AGENDAMENTO_INCLUDE,
+    const payload = await buildAgendamentoPayload(ctx.prisma, id)
+    const updated = await ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.agendamento.update({
+        where: { id },
+        data: { data_hora_inicio: novaData, banhista_id: novoBanhistaId },
+        include: AGENDAMENTO_INCLUDE,
+      })
+      await enqueueOutbox(tx, 'alterado', { ...payload, dataHoraInicio: novaData })
+      return result
     })
     return mapAgendamento(updated)
   },

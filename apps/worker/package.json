@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@patafy/db": "workspace:*",
-    "@patafy/shared-types": "workspace:*"
+    "@patafy/shared-types": "workspace:*",
+    "resend": "^6.16.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
