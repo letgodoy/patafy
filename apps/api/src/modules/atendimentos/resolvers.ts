@@ -3,6 +3,7 @@ import type { GraphQLContext } from '../../context.js'
 import { requireAuth, requirePetshopRole } from '../auth/rbac.js'
 import { assertTransition } from '../agendamentos/state-machine.js'
 import type { AgendamentoStatus } from '../agendamentos/state-machine.js'
+import { auditLog } from '../auditoria/audit.service.js'
 
 const ATENDIMENTO_INCLUDE = {
   adicionais: true,
@@ -95,7 +96,10 @@ export const atendimentosMutations = {
     const ag = await ctx.prisma.agendamento.findUniqueOrThrow({ where: { id: agendamentoId } })
     await requireBanhistaOrStaff(ctx, ag.petshop_id)
     assertTransition(ag.status as AgendamentoStatus, 'EmAndamento')
-    await ctx.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'EmAndamento' } })
+    await ctx.prisma.$transaction(async (tx) => {
+      await tx.agendamento.update({ where: { id: agendamentoId }, data: { status: 'EmAndamento' } })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId, entityType: 'Agendamento', entityId: agendamentoId, action: 'STATUS_CHANGED', metadata: { from: ag.status, to: 'EmAndamento' } })
+    })
     return mapAtendimento(await findAtendimento(ctx, agendamentoId))
   },
 
@@ -103,7 +107,10 @@ export const atendimentosMutations = {
     const ag = await ctx.prisma.agendamento.findUniqueOrThrow({ where: { id: agendamentoId } })
     await requireBanhistaOrStaff(ctx, ag.petshop_id)
     assertTransition(ag.status as AgendamentoStatus, 'Pronto')
-    await ctx.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'Pronto' } })
+    await ctx.prisma.$transaction(async (tx) => {
+      await tx.agendamento.update({ where: { id: agendamentoId }, data: { status: 'Pronto' } })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId, entityType: 'Agendamento', entityId: agendamentoId, action: 'STATUS_CHANGED', metadata: { from: ag.status, to: 'Pronto' } })
+    })
     return mapAtendimento(await findAtendimento(ctx, agendamentoId))
   },
 
@@ -115,9 +122,13 @@ export const atendimentosMutations = {
     await requireBanhistaOrStaff(ctx, ag.petshop_id)
     assertTransition(ag.status as AgendamentoStatus, 'Finalizado')
 
-    await ctx.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'Finalizado' } })
-
     const varianteIds = ag.servicos.map((s) => s.servico_variante_id)
+
+    await ctx.prisma.$transaction(async (tx) => {
+      await tx.agendamento.update({ where: { id: agendamentoId }, data: { status: 'Finalizado' } })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId, entityType: 'Agendamento', entityId: agendamentoId, action: 'STATUS_CHANGED', metadata: { from: ag.status, to: 'Finalizado' } })
+    })
+
     await debitarPacote(ctx, agendamentoId, ag.pet_id, ag.petshop_id, varianteIds)
 
     return mapAtendimento(await findAtendimento(ctx, agendamentoId))
@@ -128,12 +139,11 @@ export const atendimentosMutations = {
     const ag = await ctx.prisma.agendamento.findUniqueOrThrow({ where: { id: at.agendamento_id } })
     requirePetshopRole(ctx, ag.petshop_id, ['owner', 'atendente', 'banhista'])
 
-    await ctx.prisma.atendimentoServicoAdicional.create({
-      data: {
-        atendimento_id: input.atendimentoId,
-        servico_variante_id: input.servicoVarianteId,
-        preco_cobrado: input.precoCobrado,
-      },
+    await ctx.prisma.$transaction(async (tx) => {
+      await tx.atendimentoServicoAdicional.create({
+        data: { atendimento_id: input.atendimentoId, servico_variante_id: input.servicoVarianteId, preco_cobrado: input.precoCobrado },
+      })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: ag.id, entityType: 'Atendimento', entityId: input.atendimentoId, action: 'SERVICO_ADICIONAL', metadata: { variante_id: input.servicoVarianteId, preco: input.precoCobrado } })
     })
 
     return mapAtendimento(await ctx.prisma.atendimento.findUniqueOrThrow({ where: { id: input.atendimentoId }, include: ATENDIMENTO_INCLUDE }))
@@ -146,7 +156,11 @@ export const atendimentosMutations = {
     const isStaff = ctx.petshopProfiles.some((p) => p.petshop_id === ag.petshop_id && p.ativo)
     const isTutorDono = ctx.tutorProfile?.id === ag.tutor_profile_id
     if (!isStaff && !isTutorDono) throw new GraphQLError('Sem permissão', { extensions: { code: 'FORBIDDEN' } })
-    const updated = await ctx.prisma.atendimento.update({ where: { id: atendimentoId }, data: { observacoes_gerais: texto }, include: ATENDIMENTO_INCLUDE })
+    const updated = await ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.atendimento.update({ where: { id: atendimentoId }, data: { observacoes_gerais: texto }, include: ATENDIMENTO_INCLUDE })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: ag.id, entityType: 'Atendimento', entityId: atendimentoId, action: 'OBS_UPDATED', metadata: { tipo: 'geral' } })
+      return result
+    })
     return mapAtendimento(updated)
   },
 
@@ -154,7 +168,11 @@ export const atendimentosMutations = {
     const at = await ctx.prisma.atendimento.findUniqueOrThrow({ where: { id: atendimentoId }, include: ATENDIMENTO_INCLUDE })
     const ag = await ctx.prisma.agendamento.findUniqueOrThrow({ where: { id: at.agendamento_id } })
     requirePetshopRole(ctx, ag.petshop_id, ['owner', 'atendente'])
-    const updated = await ctx.prisma.atendimento.update({ where: { id: atendimentoId }, data: { observacoes_internas: texto }, include: ATENDIMENTO_INCLUDE })
+    const updated = await ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.atendimento.update({ where: { id: atendimentoId }, data: { observacoes_internas: texto }, include: ATENDIMENTO_INCLUDE })
+      await auditLog(tx, { actorUserId: ctx.user?.id ?? null, petshopId: ag.petshop_id, agendamentoId: ag.id, entityType: 'Atendimento', entityId: atendimentoId, action: 'OBS_UPDATED', metadata: { tipo: 'interna' } })
+      return result
+    })
     return mapAtendimento(updated)
   },
 }

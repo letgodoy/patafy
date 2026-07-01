@@ -1,0 +1,12 @@
+fragment RegistroFields on RegistroOperacional {
+  id occurredAt actorUserId petshopId agendamentoId
+  entityType entityId action metadata
+}
+
+query RegistrosOperacionais($filter: RegistroOperacionalFilter) {
+  registrosOperacionais(filter: $filter) { ...RegistroFields }
+}
+
+query RegistrosPorAgendamento($agendamentoId: ID!) {
+  registrosPorAgendamento(agendamentoId: $agendamentoId) { ...RegistroFields }
+}
