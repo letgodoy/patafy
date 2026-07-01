@@ -10,6 +10,7 @@ import { agendamentosTypeDefs, agendamentosResolvers } from './modules/agendamen
 import { atendimentosTypeDefs, atendimentosResolvers } from './modules/atendimentos/index.js'
 import { notificacoesTypeDefs, notificacoesResolvers } from './modules/notificacoes/index.js'
 import { auditoriaTypeDefs, auditoriaResolvers } from './modules/auditoria/index.js'
+import { relatoriosTypeDefs, relatoriosResolvers } from './modules/relatorios/index.js'
 
 const baseTypeDefs = /* GraphQL */ `
   type Query {
@@ -28,6 +29,6 @@ const baseResolvers = {
 }
 
 export const schema = createSchema<GraphQLContext>({
-  typeDefs: [baseTypeDefs, authTypeDefs, catalogoGlobalTypeDefs, petshopsTypeDefs, petsTypeDefs, servicosTypeDefs, pacotesTypeDefs, agendamentosTypeDefs, atendimentosTypeDefs, notificacoesTypeDefs, auditoriaTypeDefs],
-  resolvers: [baseResolvers, authResolvers, catalogoGlobalResolvers, petshopsResolvers, petsResolvers, servicosResolvers, pacotesResolvers, agendamentosResolvers, atendimentosResolvers, notificacoesResolvers, auditoriaResolvers],
+  typeDefs: [baseTypeDefs, authTypeDefs, catalogoGlobalTypeDefs, petshopsTypeDefs, petsTypeDefs, servicosTypeDefs, pacotesTypeDefs, agendamentosTypeDefs, atendimentosTypeDefs, notificacoesTypeDefs, auditoriaTypeDefs, relatoriosTypeDefs],
+  resolvers: [baseResolvers, authResolvers, catalogoGlobalResolvers, petshopsResolvers, petsResolvers, servicosResolvers, pacotesResolvers, agendamentosResolvers, atendimentosResolvers, notificacoesResolvers, auditoriaResolvers, relatoriosResolvers],
 })
