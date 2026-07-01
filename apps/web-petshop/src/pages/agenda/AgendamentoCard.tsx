@@ -16,6 +16,7 @@ type Actions = {
   onFinalizar: (id: string) => void
   onNaoCompareceu: (id: string) => void
   onTogglePago: (id: string) => void
+  onAbrirAtendimento?: () => void
 }
 
 export const STATUS_LABEL: Record<string, { label: string; bg: string; color: string }> = {
@@ -31,7 +32,7 @@ export const STATUS_LABEL: Record<string, { label: string; bg: string; color: st
 
 type Props = { ag: Agendamento; expanded: boolean; onToggle: () => void } & Actions
 
-export function AgendamentoCard({ ag, expanded, onToggle, onConfirm, onCancel, onIniciar, onPronto, onFinalizar, onNaoCompareceu, onTogglePago }: Props) {
+export function AgendamentoCard({ ag, expanded, onToggle, onConfirm, onCancel, onIniciar, onPronto, onFinalizar, onNaoCompareceu, onTogglePago, onAbrirAtendimento }: Props) {
   const st = STATUS_LABEL[ag.status] ?? { label: ag.status, bg: '#f3f4f6', color: '#555' }
   const dt = new Date(ag.dataHoraInicio)
 
@@ -78,6 +79,11 @@ export function AgendamentoCard({ ag, expanded, onToggle, onConfirm, onCancel, o
             <button onClick={() => onTogglePago(ag.id)} style={{ ...btnSmall, color: ag.pago ? '#6b7280' : '#16a34a' }}>
               {ag.pago ? 'Desmarcar pago' : 'Marcar pago'}
             </button>
+            {onAbrirAtendimento && (
+              <button onClick={onAbrirAtendimento} style={{ ...btnSmall, background: '#f0fdf4', color: '#16a34a', borderColor: '#86efac', marginLeft: 'auto' }}>
+                Ver Atendimento
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -339,6 +339,7 @@ model ServicoVariante {
 
   agendamento_servicos   AgendamentoServico[]
   atendimento_servicos   AtendimentoServico[]
+  atendimento_adicionais AtendimentoServicoAdicional[]
   pacote_items           PacoteItem[]
 
   @@map("servico_variantes")
@@ -489,6 +490,7 @@ model Atendimento {
   agendamento Agendamento        @relation(fields: [agendamento_id], references: [id])
   banhista    PetshopUserProfile @relation("BanistaAtendimento", fields: [banhista_id], references: [id])
   servicos    AtendimentoServico[]
+  adicionais  AtendimentoServicoAdicional[]
 
   @@map("atendimentos")
 }
@@ -505,6 +507,19 @@ model AtendimentoServico {
   servico_variante ServicoVariante @relation(fields: [servico_variante_id], references: [id])
 
   @@map("atendimento_servicos")
+}
+
+model AtendimentoServicoAdicional {
+  id                  String   @id @default(uuid())
+  atendimento_id      String
+  servico_variante_id String
+  preco_cobrado       Decimal  @db.Decimal(12, 2)
+  created_at          DateTime @default(now()) @db.Timestamptz
+
+  atendimento      Atendimento     @relation(fields: [atendimento_id], references: [id])
+  servico_variante ServicoVariante @relation(fields: [servico_variante_id], references: [id])
+
+  @@map("atendimento_servicos_adicionais")
 }
 
 model BloqueioAgenda {

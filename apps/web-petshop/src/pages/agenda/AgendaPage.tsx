@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMyPetShopIdQuery, useAgendaPetShopQuery, useConfirmAgendamentoMutation, useCancelAgendamentoMutation, useMarkNaoCompareceuMutation, useTogglePagoMutation, useUpdateAgendamentoStatusMutation } from '@patafy/graphql-client'
 import { PageHeader, btnSmall, colors } from '@patafy/ui'
 import { AgendamentoCard, STATUS_LABEL } from './AgendamentoCard.js'
+import { AtendimentoDetalhe } from './AtendimentoDetalhe.js'
 
 type Agendamento = {
   id: string; petshopId: string; dataHoraInicio: string; duracaoTotalMinutos: number
@@ -12,6 +13,7 @@ type Agendamento = {
 }
 
 const ALL_STATUS = Object.keys(STATUS_LABEL)
+const ATENDIMENTO_STATUSES = ['EmAndamento', 'Confirmado', 'Atrasado', 'Pronto']
 
 function dateRange(mode: 'dia' | 'semana' | 'mes', ref: Date): { from: Date; to: Date } {
   const d = new Date(ref)
@@ -41,6 +43,7 @@ export function AgendaPage() {
   const [filtroStatus, setFiltroStatus] = useState<string[]>([])
   const [filtroPago, setFiltroPago] = useState<boolean | undefined>(undefined)
   const [expandido, setExpandido] = useState<string | null>(null)
+  const [atendimentoAberto, setAtendimentoAberto] = useState<{ id: string; petNome: string; tutorNome: string } | null>(null)
 
   const { from, to } = dateRange(mode, ref)
 
@@ -71,6 +74,17 @@ export function AgendaPage() {
     : mode === 'semana'
     ? `Semana de ${from.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} a ${to.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
     : ref.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+  if (atendimentoAberto) {
+    return (
+      <AtendimentoDetalhe
+        agendamentoId={atendimentoAberto.id}
+        petNome={atendimentoAberto.petNome}
+        tutorNome={atendimentoAberto.tutorNome}
+        onClose={() => setAtendimentoAberto(null)}
+      />
+    )
+  }
 
   return (
     <div>
@@ -125,6 +139,7 @@ export function AgendaPage() {
             onFinalizar={(id) => updateStatusMutation.mutateAsync({ id, status: 'Finalizado' })}
             onNaoCompareceu={(id) => naoCompareceuMutation.mutateAsync({ id })}
             onTogglePago={(id) => togglePagoMutation.mutateAsync({ id })}
+            onAbrirAtendimento={ATENDIMENTO_STATUSES.includes(ag.status) ? () => setAtendimentoAberto({ id: ag.id, petNome: ag.pet?.nome ?? '—', tutorNome: ag.tutor?.nome ?? '—' }) : undefined}
           />
         ))}
       </div>
