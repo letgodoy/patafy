@@ -149,12 +149,21 @@ export const pacotesMutations = {
     if (!pacote.ativo) throw new GraphQLError('Pacote inativo', { extensions: { code: 'BAD_REQUEST' } })
     requirePetshopRole(ctx, pacote.petshop_id, ['owner', 'atendente'])
 
+    const items = await ctx.prisma.pacoteItem.findMany({
+      where: { pacote_id: pacoteId },
+      include: { servico_variante: { select: { preco: true } } },
+    })
+    const desconto = pacote.desconto_percentual ? Number(pacote.desconto_percentual) : 0
+    const valorBruto = items.reduce((sum, i) => sum + Number(i.servico_variante.preco) * i.quantidade_total, 0)
+    const valorTotal = valorBruto * (1 - desconto / 100)
+
     const pp = await ctx.prisma.pacotePet.create({
       data: {
         pacote_id: pacoteId,
         pet_id: petId,
         data_ativacao: new Date(dataAtivacao),
         data_expiracao: pacote.validade ?? null,
+        valor_total_snapshot: valorTotal,
       },
       include: SALDO_INCLUDE,
     })
@@ -185,8 +194,15 @@ export const pacotesMutations = {
       },
     })
 
+    const desconto = descontoPercentual ?? 0
+    const valorBruto = itens.reduce((sum, i) => {
+      const v = variantes.find((vr) => vr.id === i.servicoVarianteId)
+      return sum + Number(v?.preco ?? 0) * i.quantidade
+    }, 0)
+    const valorTotal = valorBruto * (1 - desconto / 100)
+
     const pp = await ctx.prisma.pacotePet.create({
-      data: { pacote_id: pacote.id, pet_id: petId, data_ativacao: new Date(dataAtivacao) },
+      data: { pacote_id: pacote.id, pet_id: petId, data_ativacao: new Date(dataAtivacao), valor_total_snapshot: valorTotal },
       include: SALDO_INCLUDE,
     })
     return mapSaldo(pp as PacotePetWithDebitos)

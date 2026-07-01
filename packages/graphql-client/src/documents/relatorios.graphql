@@ -1,0 +1,30 @@
+query RelatorioAtendimentosResumo($petshopId: ID!, $from: String!, $to: String!) {
+  relatorioAtendimentosResumo(petshopId: $petshopId, from: $from, to: $to) {
+    totalFinalizados
+    totalCancelados
+    totalNaoCompareceu
+    valorEstimado
+    valorPago
+    valorPendente
+  }
+}
+
+query RelatorioServicosRealizados($petshopId: ID!, $from: String!, $to: String!) {
+  relatorioServicosRealizados(petshopId: $petshopId, from: $from, to: $to) {
+    servicoVarianteId
+    servicoNome
+    varianteNome
+    quantidade
+    valorTotal
+    valorMedio
+  }
+}
+
+query RelatorioPacotes($petshopId: ID!, $from: String!, $to: String!) {
+  relatorioPacotes(petshopId: $petshopId, from: $from, to: $to) {
+    pacotesVendidos
+    valorTotalVendas
+    creditosConsumidos
+    creditosRestantes
+  }
+}

@@ -5,6 +5,7 @@ import { prisma } from './lib/prisma.js'
 import { schema } from './schema.js'
 import { buildContext } from './context.js'
 import { registerIcsRoute } from './plugins/ics.js'
+import { registerReportsRoute } from './plugins/reports.js'
 
 const PORT = Number(process.env['PORT'] ?? 3000)
 const HOST = process.env['HOST'] ?? '0.0.0.0'
@@ -56,6 +57,7 @@ async function bootstrap() {
   })
 
   await registerIcsRoute(app, prisma)
+  await registerReportsRoute(app, prisma)
 
   await app.listen({ port: PORT, host: HOST })
   app.log.info(`API running at http://${HOST}:${PORT}`)

@@ -32,6 +32,12 @@ export async function criarComLock(ctx: GraphQLContext, params: {
 
     const status = params.origem === 'atendente' ? 'Confirmado' : 'AguardandoConfirmacao'
 
+    const variantes = await tx.servicoVariante.findMany({
+      where: { id: { in: params.servicoVarianteIds } },
+      select: { id: true, preco: true, duracao_minutos: true },
+    })
+    const varianteMap = new Map(variantes.map((v) => [v.id, v]))
+
     const ag = await tx.agendamento.create({
       data: {
         petshop_id: params.petshopId,
@@ -45,7 +51,12 @@ export async function criarComLock(ctx: GraphQLContext, params: {
         origem: params.origem,
         precisa_transporte: params.precisaTransporte,
         servicos: {
-          create: params.servicoVarianteIds.map((id, ordem) => ({ servico_variante_id: id, ordem })),
+          create: params.servicoVarianteIds.map((id, ordem) => ({
+            servico_variante_id: id,
+            ordem,
+            preco_snapshot: varianteMap.get(id)?.preco,
+            duracao_snapshot_minutos: varianteMap.get(id)?.duracao_minutos,
+          })),
         },
       },
       include: AGENDAMENTO_INCLUDE,

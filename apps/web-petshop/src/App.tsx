@@ -18,6 +18,7 @@ import { VenderPacotePage } from './pages/pacotes/VenderPacotePage.js'
 import { AgendaPage } from './pages/agenda/AgendaPage.js'
 import { MinhaAgendaPage } from './pages/agenda/MinhaAgendaPage.js'
 import { AuditoriaPetshopPage } from './pages/auditoria/AuditoriaPetshopPage.js'
+import { RelatoriosPage } from './pages/relatorios/RelatoriosPage.js'
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/agenda" element={<AgendaPage />} />
           <Route path="/minha-agenda" element={<MinhaAgendaPage />} />
           <Route path="/auditoria" element={<AuditoriaPetshopPage />} />
+          <Route path="/relatorios" element={<RelatoriosPage />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<h1>404 — Página não encontrada</h1>} />
