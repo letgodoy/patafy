@@ -1,19 +1,17 @@
-import { StrictMode, useState, useMemo } from 'react'
+import { StrictMode, useMemo } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query'
-import { ErrorToast } from '@patafy/ui'
+import { AppToaster, toaster } from '@patafy/ui'
 import App from './App.tsx'
 
-function AppWithErrorHandler() {
-  const [gqlError, setGqlError] = useState<string | null>(null)
-
+function AppWithToast() {
   const queryClient = useMemo(() => new QueryClient({
     queryCache: new QueryCache({
-      onError: (err) => setGqlError(err instanceof Error ? err.message : 'Erro ao carregar dados'),
+      onError: (err) => toaster.create({ title: 'Erro ao carregar', description: err instanceof Error ? err.message : 'Tente novamente', type: 'error' }),
     }),
     mutationCache: new MutationCache({
-      onError: (err) => setGqlError(err instanceof Error ? err.message : 'Erro ao salvar'),
+      onError: (err) => toaster.create({ title: 'Erro ao salvar', description: err instanceof Error ? err.message : 'Tente novamente', type: 'error' }),
     }),
     defaultOptions: {
       queries: { retry: 1, staleTime: 30_000 },
@@ -25,7 +23,7 @@ function AppWithErrorHandler() {
       <BrowserRouter>
         <App />
       </BrowserRouter>
-      {gqlError && <ErrorToast message={gqlError} onClose={() => setGqlError(null)} />}
+      <AppToaster />
     </QueryClientProvider>
   )
 }
@@ -35,6 +33,6 @@ if (!root) throw new Error('Root element not found')
 
 createRoot(root).render(
   <StrictMode>
-    <AppWithErrorHandler />
+    <AppWithToast />
   </StrictMode>,
 )
