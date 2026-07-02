@@ -4,12 +4,13 @@ import { useAuth } from '../contexts/AuthContext.js'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
-  { to: '/petshops', label: 'Pet Shops' },
-  { to: '/catalogo/tipos', label: 'Tipos de Animal' },
-  { to: '/catalogo/racas', label: 'Raças' },
-  { to: '/catalogo/portes', label: 'Portes' },
-  { to: '/catalogo/pelagens', label: 'Pelagens' },
-  { to: '/admins', label: 'Administradores' },
+  { to: '/petshops', label: 'Pet Shops', section: 'CADASTROS' },
+  { to: '/admins', label: 'Administradores', section: 'CADASTROS' },
+  { to: '/catalogo/tipos', label: 'Tipos de Animal', section: 'CATÁLOGO' },
+  { to: '/catalogo/racas', label: 'Raças', section: 'CATÁLOGO' },
+  { to: '/catalogo/portes', label: 'Portes', section: 'CATÁLOGO' },
+  { to: '/catalogo/pelagens', label: 'Pelagens', section: 'CATÁLOGO' },
+  { to: '/auditoria', label: 'Auditoria', section: 'SISTEMA' },
 ]
 
 export function AppLayout() {
@@ -23,6 +24,7 @@ export function AppLayout() {
 
   return (
     <AdminLayout
+      title="Patafy Admin"
       navItems={NAV_ITEMS}
       userEmail={user?.email ?? ''}
       onSignOut={handleSignOut}

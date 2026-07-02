@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router'
 import { AuthProvider } from './contexts/AuthContext.js'
 import { ProtectedRoute } from './components/ProtectedRoute.js'
+import { TutorLayout } from './components/TutorLayout.js'
 import { SkeletonList } from '@patafy/ui'
 
 const LoginPage = lazy(() => import('./pages/LoginPage.js').then((m) => ({ default: m.LoginPage })))
@@ -29,20 +30,22 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/cadastro" element={<CadastroPage />} />
-          <Route path="/convites/aceitar" element={<ProtectedRoute><AceitarConvitePage /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/lojas" element={<ProtectedRoute><LojasPage /></ProtectedRoute>} />
-          <Route path="/loja/:slug" element={<ProtectedRoute><LojaPage /></ProtectedRoute>} />
-          <Route path="/pets" element={<ProtectedRoute><PetsPage /></ProtectedRoute>} />
-          <Route path="/pets/novo" element={<ProtectedRoute><PetFormPage /></ProtectedRoute>} />
-          <Route path="/pets/:id/editar" element={<ProtectedRoute><PetFormPage /></ProtectedRoute>} />
-          <Route path="/pets/:id" element={<ProtectedRoute><PetDetailPage /></ProtectedRoute>} />
-          <Route path="/pets/:id/pacotes" element={<ProtectedRoute><PetPacotesPage /></ProtectedRoute>} />
-          <Route path="/loja/:slug/servicos" element={<ProtectedRoute><LojaServicosPage /></ProtectedRoute>} />
-          <Route path="/loja/:slug/agendar" element={<ProtectedRoute><AgendarPage /></ProtectedRoute>} />
-          <Route path="/agendamentos" element={<ProtectedRoute><AgendamentosPage /></ProtectedRoute>} />
+          <Route element={<ProtectedRoute><TutorLayout /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/lojas" element={<LojasPage />} />
+            <Route path="/loja/:slug" element={<LojaPage />} />
+            <Route path="/loja/:slug/servicos" element={<LojaServicosPage />} />
+            <Route path="/loja/:slug/agendar" element={<AgendarPage />} />
+            <Route path="/pets" element={<PetsPage />} />
+            <Route path="/pets/novo" element={<PetFormPage />} />
+            <Route path="/pets/:id/editar" element={<PetFormPage />} />
+            <Route path="/pets/:id" element={<PetDetailPage />} />
+            <Route path="/pets/:id/pacotes" element={<PetPacotesPage />} />
+            <Route path="/agendamentos" element={<AgendamentosPage />} />
+            <Route path="/convites/aceitar" element={<AceitarConvitePage />} />
+          </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<h1>404 — Página não encontrada</h1>} />
+          <Route path="*" element={<h1 style={{ padding: 24 }}>404 — Página não encontrada</h1>} />
         </Routes>
       </Suspense>
     </AuthProvider>

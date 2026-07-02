@@ -1,6 +1,6 @@
 import React from 'react'
 import type { CSSProperties } from 'react'
-import { colors } from '../tokens.js'
+import { colors, radius, spacing } from '../tokens.js'
 
 export type Column<T> = {
   key: string
@@ -37,7 +37,7 @@ export function DataTable<T>({ columns, data, rowKey, loading, error, emptyText 
           {loading && (
             <tr>
               <td colSpan={columns.length} style={centeredTdStyle}>
-                Carregando...
+                <span style={{ color: colors.textMuted }}>Carregando...</span>
               </td>
             </tr>
           )}
@@ -50,14 +50,14 @@ export function DataTable<T>({ columns, data, rowKey, loading, error, emptyText 
           )}
           {!loading && !error && data.length === 0 && (
             <tr>
-              <td colSpan={columns.length} style={{ ...centeredTdStyle, color: colors.textSecondary }}>
+              <td colSpan={columns.length} style={{ ...centeredTdStyle, color: colors.textMuted }}>
                 {emptyText}
               </td>
             </tr>
           )}
           {!loading && !error && data.map((row) => (
             <React.Fragment key={rowKey(row)}>
-              <tr style={rowStyle?.(row)}>
+              <tr style={{ ...rowBaseStyle, ...rowStyle?.(row) }}>
                 {columns.map((col) => (
                   <td key={col.key} style={tdStyle}>
                     {col.render(row)}
@@ -79,8 +79,42 @@ export function DataTable<T>({ columns, data, rowKey, loading, error, emptyText 
   )
 }
 
-const tableWrapStyle: CSSProperties = { background: colors.white, borderRadius: 8, overflow: 'hidden', border: `1px solid ${colors.border}` }
+const tableWrapStyle: CSSProperties = {
+  background: colors.white,
+  borderRadius: radius.md,
+  overflow: 'hidden',
+  border: `1px solid ${colors.border}`,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+}
+
 const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse' }
-const thStyle: CSSProperties = { textAlign: 'left', padding: '10px 16px', background: colors.tableHeader, fontSize: 13, fontWeight: 600 }
-const tdStyle: CSSProperties = { padding: '10px 16px', borderTop: `1px solid ${colors.borderLight}`, fontSize: 14, verticalAlign: 'middle' }
-const centeredTdStyle: CSSProperties = { ...tdStyle, textAlign: 'center', padding: '24px 16px' }
+
+const thStyle: CSSProperties = {
+  textAlign: 'left',
+  padding: `${spacing.sm}px ${spacing.md}px`,
+  background: colors.tableHeader,
+  fontSize: 12,
+  fontWeight: 600,
+  color: colors.textSecondary,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  borderBottom: `1px solid ${colors.border}`,
+}
+
+const rowBaseStyle: CSSProperties = {
+  transition: 'background 0.1s',
+}
+
+const tdStyle: CSSProperties = {
+  padding: `${spacing.sm + 2}px ${spacing.md}px`,
+  borderBottom: `1px solid ${colors.borderLight}`,
+  fontSize: 14,
+  color: colors.textPrimary,
+  verticalAlign: 'middle',
+}
+
+const centeredTdStyle: CSSProperties = {
+  ...tdStyle,
+  textAlign: 'center',
+  padding: `${spacing.xl}px ${spacing.md}px`,
+}

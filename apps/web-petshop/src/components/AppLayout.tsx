@@ -4,9 +4,16 @@ import { useAuth } from '../contexts/AuthContext.js'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
-  { to: '/configuracoes', label: 'Configurações' },
-  { to: '/equipe', label: 'Equipe' },
-  { to: '/bloqueios', label: 'Bloqueios de Agenda' },
+  { to: '/agenda', label: 'Agenda', section: 'AGENDA' },
+  { to: '/minha-agenda', label: 'Minha Agenda', section: 'AGENDA' },
+  { to: '/clientes/buscar', label: 'Clientes', section: 'GESTÃO' },
+  { to: '/servicos', label: 'Serviços', section: 'GESTÃO' },
+  { to: '/pacotes', label: 'Pacotes', section: 'GESTÃO' },
+  { to: '/relatorios', label: 'Relatórios', section: 'GESTÃO' },
+  { to: '/configuracoes', label: 'Configurações', section: 'CONFIGURAÇÕES' },
+  { to: '/equipe', label: 'Equipe', section: 'CONFIGURAÇÕES' },
+  { to: '/bloqueios', label: 'Bloqueios', section: 'CONFIGURAÇÕES' },
+  { to: '/auditoria', label: 'Auditoria', section: 'CONFIGURAÇÕES' },
 ]
 
 export function AppLayout() {
